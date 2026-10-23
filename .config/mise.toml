@@ -12,6 +12,17 @@ depends = ["lint:*"]
 description = "Lint files against .editorconfig"
 run = "editorconfig-checker"
 
+[tasks."lint:markdown"]
+description = "Lint Markdown files"
+run = "rumdl check --deny-config-warnings"
+
+[tasks."lint:toml"]
+description = "Lint TOML files"
+run = [
+  "tombi lint --error-on-warnings .",
+  "tombi format --check --diff .",
+]
+
 [tasks."lint:workflows"]
 description = "Audit GitHub Actions files"
 run = "zizmor --strict-collection ."
@@ -19,4 +30,6 @@ run = "zizmor --strict-collection ."
 # Check for updates: mise outdated --bump
 [tools]
 editorconfig-checker = "4.0.2"  # Lint files against .editorconfig
+rumdl = "0.2.77"                # Lint Markdown files
+tombi = "1.5.5"                 # Lint TOML files
 zizmor = "1.31.1"               # Audit GitHub Actions files

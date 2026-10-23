@@ -31,5 +31,8 @@ trim_trailing_whitespace = true
 #     parent's content.
 # ```
 
+[*.py]
+indent_size = 4
+
 [*.yml]
 indent_size = 2

@@ -2,6 +2,7 @@
 
 *.lock         text
 *.md           text diff=markdown
+*.py           text diff=python
 *.toml         text
 *.yml          text
 

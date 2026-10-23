@@ -8,6 +8,8 @@ watershipup is a Python package and command that publishes a static website to a
 mise install                # Install the pinned tools
 mise run lint               # Every linter, stopping at the first failure
 mise run lint:editorconfig  # One linter
+mise exec -- rumdl fmt      # Fix Markdown
+mise exec -- tombi format . # Fix TOML formatting
 ```
 
 ## Keep in sync

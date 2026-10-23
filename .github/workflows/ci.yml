@@ -9,9 +9,7 @@ on:
 permissions: {}
 
 env:
-  MISE_LOCKED: 1                    # Fail if `.config/mise.lock` is out of date
-  MISE_LOCKED_VERIFY_PROVENANCE: 1  # Don't trust `.config/mise.lock`
-  MISE_USE_VERSIONS_HOST: 0         # Ask GitHub, not mise's proxy, for attestations
+  MISE_LOCKED: 1
 
 jobs:
   lint:
@@ -32,3 +30,8 @@ jobs:
 
       - name: Lint files against .editorconfig
         run: mise run lint:editorconfig
+
+      - name: Audit GitHub Actions files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise run lint:workflows

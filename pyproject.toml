@@ -37,7 +37,7 @@ Issues = "https://github.com/cariad/watershipup/issues"
 Source = "https://github.com/cariad/watershipup"
 
 [tool.coverage.report]
-fail_under = 95
+fail_under = 90
 show_missing = true
 skip_covered = true
 

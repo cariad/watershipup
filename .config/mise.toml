@@ -12,6 +12,11 @@ depends = ["lint:*"]
 description = "Lint files against .editorconfig"
 run = "editorconfig-checker"
 
+[tasks."lint:workflows"]
+description = "Audit GitHub Actions files"
+run = "zizmor --strict-collection ."
+
 # Check for updates: mise outdated --bump
 [tools]
 editorconfig-checker = "4.0.2"  # Lint files against .editorconfig
+zizmor = "1.31.1"               # Audit GitHub Actions files

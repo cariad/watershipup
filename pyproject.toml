@@ -21,7 +21,9 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+  "mosey>=0.5.0,<0.6",
+]
 description = "Uploads static websites to Bunny Storage zones"
 dynamic = ["version"]
 license = "MIT"

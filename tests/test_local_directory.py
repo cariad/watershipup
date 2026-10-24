@@ -1,9 +1,10 @@
 """Tests for local directories."""
 
 import os
+import sys
 from pathlib import Path
 
-from pytest import raises
+from pytest import mark, raises
 
 from watershipup.local_directory import walk_local_directory
 from watershipup.local_file import LocalFile
@@ -62,6 +63,18 @@ def test_walk_local_directory_raises_when_missing(tmp_path: Path) -> None:
     """`walk_local_directory` must raise when the directory doesn't exist."""
     with raises(FileNotFoundError):
         walk_local_directory(tmp_path / "missing")
+
+
+@mark.skipif(
+    sys.platform == "darwin",
+    reason="macOS can't create a name that isn't valid UTF-8",
+)
+def test_walk_local_directory_raises_when_name_not_utf8(tmp_path: Path) -> None:
+    """`walk_local_directory` must raise when a name isn't valid UTF-8."""
+    (tmp_path / os.fsdecode(b"caf\xe9.html")).touch()
+
+    with raises(UnicodeEncodeError):
+        walk_local_directory(tmp_path)
 
 
 def test_walk_local_directory_raises_when_not_a_directory(tmp_path: Path) -> None:

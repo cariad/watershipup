@@ -49,9 +49,16 @@ jobs:
         run: mise run lint:workflows
 
   test:
+    # Every job uses the same test storage zone, so they need to take turns.
+    concurrency:
+      group: test-storage-zone
+      # Let more than one job wait, so a newer job won't cancel a pending one.
+      queue: max
+
     env:
       UV_PYTHON: ${{ matrix.python }}
 
+    environment: integration-testing
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
@@ -78,5 +85,11 @@ jobs:
           cache: false  # Restored tools aren't verified, so don't cache them
           version: 2026.10.11
 
-      - name: Run the unit tests
+      - name: Install the package
+        run: mise exec -- uv sync --locked
+
+      - name: Run the tests
+        env:
+          WATERSHIPUP_TEST_PASSWORD: ${{ secrets.WATERSHIPUP_TEST_PASSWORD }}
+          WATERSHIPUP_TEST_ZONE: ${{ secrets.WATERSHIPUP_TEST_ZONE }}
         run: mise run test

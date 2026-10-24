@@ -39,8 +39,18 @@ description = "Audit GitHub Actions files"
 run = "zizmor --strict-collection ."
 
 [tasks.test]
-description = "Run the unit tests"
+description = "Run every test"
+env = { _.file = ".env" }
 run = "uv run --locked pytest"
+
+[tasks."test:integration"]
+description = "Run the integration tests only"
+env = { _.file = ".env" }
+run = "uv run --locked pytest --no-cov tests/integration"
+
+[tasks."test:unit"]
+description = "Run the unit tests only"
+run = "uv run --locked pytest --no-cov tests/unit"
 
 # Check for updates: mise outdated --bump
 [tools]

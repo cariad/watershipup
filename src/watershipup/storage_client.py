@@ -69,12 +69,13 @@ class StorageClient:
         """
         url = self.make_url(remote_path)
 
-        response = httpx2.put(
-            url,
-            content=local_path.read_bytes(),
-            headers=self._headers,
-            timeout=self._timeout,
-        )
+        with local_path.open("rb") as f:
+            response = httpx2.put(
+                url,
+                content=f,
+                headers=self._headers,
+                timeout=self._timeout,
+            )
 
         if response.status_code == 201:
             return

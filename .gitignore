@@ -1,4 +1,5 @@
 .coverage
+.env
 .ruff_cache/
 .rumdl_cache/
 __pycache__/

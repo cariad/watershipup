@@ -8,7 +8,9 @@ watershipup is a Python package and command that publishes a static website to a
 mise install                # Install the pinned tools
 mise run lint               # Every linter, stopping at the first failure
 mise run lint:editorconfig  # One linter
-mise run test               # The unit tests, which must cover every line and branch
+mise run test               # Every test, with coverage
+mise run test:integration   # The integration tests, which take over the storage zone in .env
+mise run test:unit          # The unit tests, without checking coverage
 mise exec -- uv run --locked pytest --no-cov tests/unit/cli/test_main.py::test_help  # One test
 mise exec -- rumdl fmt      # Fix Markdown
 mise exec -- tombi format . # Fix TOML formatting
@@ -29,8 +31,9 @@ mise exec -- uv run --locked ruff format       # Format Python
 - The README is in the maintainer's own voice. Change only what a task needs, and ask before rewriting their wording.
 - Use only `example.com`-style names and made-up hashes, and never name or describe a real site.
 - Never run `mise trust`. If mise says a file isn't trusted, ask.
+- Never run `mise run test` or `mise run test:integration`, never read `.env`, and never ask for a storage zone's password. Run `mise run test:unit` instead. The maintainer runs the integration tests and shares the output.
 - British spelling.
 - Within a Python module, functions are in alphabetical order, with private (underscored) names first.
 - No `unittest.mock`, and no monkeypatching to reach a line. Setting an environment variable that the code reads is fine.
-- Tests must cover every line and branch on Linux and on macOS, so a partial test run needs `--no-cov`.
+- Tests must cover every line and branch on Linux and on macOS, except error handling that no test can reach, such as an answer a real storage zone can't be made to give. Coverage is measured across every test, so a partial test run needs `--no-cov`.
 - pyright is strict and flags a test that imports a private name, so anything a test needs must be public.

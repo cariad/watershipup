@@ -23,6 +23,8 @@ def walk_local_directory(
     Raises:
         OSError: When the directory or one of its subdirectories can't be
             read.
+        UnicodeEncodeError: When a file's path within the directory isn't
+            valid UTF-8.
     """
     builder = Mosey()
     builder.ignore_symlinks()
@@ -31,7 +33,10 @@ def walk_local_directory(
     found_files = (
         LocalFile(
             step.path,
-            step.relative_as_posix,
+            # A path that isn't valid UTF-8 can't be a storage zone path, so
+            # encoding it raises `UnicodeEncodeError` before anything is
+            # uploaded.
+            step.relative_as_posix.encode().decode(),
         )
         for step in walker.walk(directory)
     )

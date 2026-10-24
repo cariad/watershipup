@@ -58,7 +58,9 @@ typeCheckingMode = "strict"
 
 [tool.pytest.ini_options]
 addopts = "--cov"
-testpaths = ["tests"]
+testpaths = [
+  "tests/unit",
+]
 
 [tool.ruff.format]
 line-ending = "lf"

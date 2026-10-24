@@ -9,7 +9,7 @@ mise install                # Install the pinned tools
 mise run lint               # Every linter, stopping at the first failure
 mise run lint:editorconfig  # One linter
 mise run test               # The unit tests, which must cover every line and branch
-mise exec -- uv run --locked pytest --no-cov tests/cli/test_main.py::test_help  # One test
+mise exec -- uv run --locked pytest --no-cov tests/unit/cli/test_main.py::test_help  # One test
 mise exec -- rumdl fmt      # Fix Markdown
 mise exec -- tombi format . # Fix TOML formatting
 mise exec -- uv run --locked ruff check --fix  # Fix what ruff can

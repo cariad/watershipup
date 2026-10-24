@@ -3,11 +3,12 @@
 from pathlib import Path
 from uuid import uuid4
 
-from pytest import mark
+from pytest import mark, raises
 
+from watershipup.exceptions import RequestFailedError
 from watershipup.storage_client import StorageClient
 
-from .storage_zone import read_storage
+from .storage_zone import environment_variable, read_storage
 
 
 @mark.parametrize(
@@ -40,3 +41,26 @@ def test_upload(
     )
 
     assert found_bytes == content
+
+
+def test_upload_wrong_password(
+    tmp_path: Path,
+) -> None:
+    """`upload` must raise `RequestFailedError` when the zone refuses the password."""
+    client = StorageClient(
+        password="not-the-password",
+        zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
+    )
+
+    local_path = tmp_path / "file.txt"
+    local_path.write_text("Hello, world!")
+
+    with raises(RequestFailedError) as ex:
+        client.upload(
+            local_path,
+            "test_upload_wrong_password.txt",
+        )
+
+    assert ex.value.method == "PUT"
+    assert ex.value.path == "test_upload_wrong_password.txt"
+    assert ex.value.status == 401

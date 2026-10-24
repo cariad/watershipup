@@ -120,6 +120,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mosey"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b7/8c/b8c268e130076fe071d88f0a925037ce657356229844777167db158c383b/mosey-0.5.0.tar.gz", hash = "sha256:f3d52ec88eab0c479c00f8bc2d2351e6757d85d577ce11b882a2228cb83a4b3f", size = 165853, upload-time = "2026-10-24T09:31:32.858Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9c/4d/d404946c13ebc8aa9b7f51bd3d134617baefa3ff4514b580720ef993faf8/mosey-0.5.0-py3-none-any.whl", hash = "sha256:076910e7d6e736538398d0da79b558add7bf5d59930ee1e2e85b6e65ecccceec", size = 34746, upload-time = "2026-10-24T09:31:31.498Z" },
+]
+
+[[package]]
 name = "nodeenv"
 version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -235,6 +244,9 @@ wheels = [
 [[package]]
 name = "watershipup"
 source = { editable = "." }
+dependencies = [
+    { name = "mosey" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -245,6 +257,7 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "mosey", specifier = ">=0.5.0,<0.6" }]
 
 [package.metadata.requires-dev]
 dev = [

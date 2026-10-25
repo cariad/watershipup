@@ -105,12 +105,12 @@ def test_list(
             ZoneFile(
                 "test_list_directory/a.txt",
                 checksum_of(contents["test_list_directory/a.txt"]),
-                "",
+                None,
             ),
             ZoneFile(
                 "test_list_directory/b.txt",
                 checksum_of(contents["test_list_directory/b.txt"]),
-                "",
+                None,
             ),
         },
         {
@@ -157,7 +157,7 @@ def test_list_directory_root(
     expect = ZoneFile(
         "test_list_root.txt",
         checksum,
-        "",
+        None,
     )
 
     assert expect in listing.files
@@ -237,6 +237,38 @@ def test_upload_two_files(
     assert found == expect
 
 
+def test_upload_webmanifest(
+    client: StorageClient,
+    tmp_path: Path,
+) -> None:
+    """`upload` must store a `.webmanifest` file with its content type."""
+    remote_path = "test_upload_webmanifest/site.webmanifest"
+
+    # Start without the file, so a type stored by an earlier run can't pass.
+    client.delete(remote_path)
+
+    local_path = tmp_path / "site.webmanifest"
+    local_path.write_text("{}")
+
+    checksum = checksum_of(local_path.read_bytes())
+
+    client.upload(
+        local_path,
+        remote_path,
+        checksum=checksum,
+    )
+
+    listing = client.list_directory("test_upload_webmanifest/")
+
+    expect = ZoneFile(
+        remote_path,
+        checksum,
+        "application/manifest+json",
+    )
+
+    assert expect in listing.files
+
+
 def test_upload_wrong_checksum(
     client: StorageClient,
     tmp_path: Path,
@@ -306,7 +338,11 @@ def test_walk_zone(
     found = set(client.walk_zone())
 
     expect = {
-        ZoneFile(remote_path, checksum_of(content), "")
+        ZoneFile(
+            remote_path,
+            checksum_of(content),
+            None,
+        )
         for remote_path, content in contents.items()
     }
 

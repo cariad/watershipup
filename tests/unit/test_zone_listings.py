@@ -151,7 +151,11 @@ def test_parse_listing() -> None:
 
     expect = ZoneListing(
         files=(
-            ZoneFile("index.html", index_checksum, ""),
+            ZoneFile(
+                "index.html",
+                index_checksum,
+                None,
+            ),
             ZoneFile(
                 "site.webmanifest",
                 manifest_checksum,
@@ -231,7 +235,16 @@ def test_parse_listing_ignores_path() -> None:
         content,
     )
 
-    expect = ZoneListing(files=(ZoneFile("css/site.css", None, ""),), directories=())
+    expect = ZoneListing(
+        files=(
+            ZoneFile(
+                "css/site.css",
+                None,
+                None,
+            ),
+        ),
+        directories=(),
+    )
 
     assert listing == expect
 
@@ -311,7 +324,16 @@ def test_parse_listing_uppercases_checksum() -> None:
         content,
     )
 
-    expect = ZoneListing(files=(ZoneFile("index.html", checksum, ""),), directories=())
+    expect = ZoneListing(
+        files=(
+            ZoneFile(
+                "index.html",
+                checksum,
+                None,
+            ),
+        ),
+        directories=(),
+    )
 
     assert listing == expect
 
@@ -330,7 +352,7 @@ def test_parse_listing_uppercases_checksum() -> None:
     ],
 )
 def test_parse_listing_without_checksum_or_type(entry: dict[str, object]) -> None:
-    """`parse_listing` must record no checksum as `None`, and no type as ""."""
+    """`parse_listing` must record no checksum or type as `None`."""
     content = json.dumps([entry]).encode()
 
     listing = parse_listing(
@@ -338,6 +360,15 @@ def test_parse_listing_without_checksum_or_type(entry: dict[str, object]) -> Non
         content,
     )
 
-    expect = ZoneListing(files=(ZoneFile("index.html", None, ""),), directories=())
+    expect = ZoneListing(
+        files=(
+            ZoneFile(
+                "index.html",
+                None,
+                None,
+            ),
+        ),
+        directories=(),
+    )
 
     assert listing == expect

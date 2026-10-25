@@ -10,9 +10,9 @@ class ZoneFile:
     Attributes:
         path: Path within the storage zone.
         checksum: The file's SHA-256, in uppercase hexadecimal, if it has one.
-        content_type: The file's stored type, or "" when it was uploaded without one.
+        content_type: The file's stored type, if it has one.
     """
 
     path: str
     checksum: str | None
-    content_type: str
+    content_type: str | None

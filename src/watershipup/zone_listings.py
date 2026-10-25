@@ -124,7 +124,7 @@ def parse_listing(
         zone_file = ZoneFile(
             path,
             checksum.upper() if checksum else None,
-            content_type or "",
+            content_type or None,
         )
 
         files.append(zone_file)

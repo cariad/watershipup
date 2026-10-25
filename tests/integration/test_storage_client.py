@@ -39,11 +39,39 @@ def test_upload(
     )
 
     found_bytes = read_storage(
-        client,
         remote_path,
     )
 
     assert found_bytes == content
+
+
+def test_upload_two_files(
+    client: StorageClient,
+    tmp_path: Path,
+) -> None:
+    """`upload` must store a second file through the client that stored the first."""
+    # Different on every run, so a file left by an earlier run can't pass.
+    expect = {
+        "test_upload_two_files/1.txt": uuid4().bytes,
+        "test_upload_two_files/2.txt": uuid4().bytes,
+    }
+
+    # One client for both, so the second upload can reuse the first's connection.
+    for remote_path, content in expect.items():
+        checksum = sha256(content).hexdigest().upper()
+
+        local_path = tmp_path / "file.txt"
+        local_path.write_bytes(content)
+
+        client.upload(
+            local_path,
+            remote_path,
+            checksum=checksum,
+        )
+
+    found = {remote_path: read_storage(remote_path) for remote_path in expect}
+
+    assert found == expect
 
 
 def test_upload_wrong_checksum(
@@ -72,17 +100,18 @@ def test_upload_wrong_password(
     tmp_path: Path,
 ) -> None:
     """`upload` must raise `RequestFailedError` when the zone refuses the password."""
-    client = StorageClient(
-        password="not-the-password",
-        zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
-    )
-
     local_path = tmp_path / "file.txt"
     local_path.write_text("Hello, world!")
 
     checksum = sha256(local_path.read_bytes()).hexdigest().upper()
 
-    with raises(RequestFailedError) as ex:
+    with (
+        StorageClient(
+            password="not-the-password",
+            zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
+        ) as client,
+        raises(RequestFailedError) as ex,
+    ):
         client.upload(
             local_path,
             "test_upload_wrong_password.txt",

@@ -33,7 +33,7 @@ mise exec -- uv run --locked ruff format       # Format Python
 - Never run `mise trust`. If mise says a file isn't trusted, ask.
 - Never run `mise run test` or `mise run test:integration`, never read `.env`, and never ask for a storage zone's password. Run `mise run test:unit` instead. The maintainer runs the integration tests and shares the output.
 - British spelling.
-- Within a Python module, functions are in alphabetical order, with private (underscored) names first.
+- Within a Python module, functions are in alphabetical order, with private (underscored) names first. So are a class's methods, where dunders count as underscored, so `__init__` comes after `__enter__` and `__exit__`.
 - No `unittest.mock`, and no monkeypatching to reach a line. Setting an environment variable that the code reads is fine.
 - Tests must cover every line and branch on Linux and on macOS, except error handling that no test can reach, such as an answer a real storage zone can't be made to give. Coverage is measured across every test, so a partial test run needs `--no-cov`.
 - pyright is strict and flags a test that imports a private name, so anything a test needs must be public.

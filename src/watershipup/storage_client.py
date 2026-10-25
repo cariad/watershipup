@@ -1,17 +1,43 @@
 """The `StorageClient` class, which interacts with a storage zone's HTTP API."""
 
+from http.cookiejar import CookieJar, DefaultCookiePolicy
 from pathlib import Path
-from urllib.parse import quote
+from types import TracebackType
+from typing import Self
 
 import httpx2
 
 from .exceptions import RequestFailedError
-
-STORAGE_HOST = "storage.bunnycdn.com"
+from .urls import make_zone_url
 
 
 class StorageClient:
-    """A client for a storage zone's HTTP API."""
+    """A client for a storage zone's HTTP API.
+
+    Connections are kept open between requests, so close it when you're done, or use it
+    as a context manager.
+    """
+
+    def __enter__(self) -> Self:
+        """Use the client as a context manager.
+
+        Returns:
+            The client.
+
+        Raises:
+            RuntimeError: When the client has already been used or closed.
+        """
+        self._client.__enter__()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Close the client's connections."""
+        self.close()
 
     def __init__(
         self,
@@ -25,30 +51,33 @@ class StorageClient:
             password: The storage zone's password.
             zone: The storage zone's name.
         """
-        self._headers = {
+        # Reject every cookie, so requests carry nothing from earlier responses.
+        cookies = CookieJar(
+            DefaultCookiePolicy(
+                allowed_domains=[],
+            ),
+        )
+
+        headers = {
             "AccessKey": password,
         }
 
-        self._timeout = httpx2.Timeout(
+        timeout = httpx2.Timeout(
             120,
             connect=30,
         )
 
+        self._client = httpx2.Client(
+            cookies=cookies,
+            headers=headers,
+            timeout=timeout,
+        )
+
         self._zone = zone
 
-    def make_url(
-        self,
-        remote_path: str,
-    ) -> str:
-        """Make the storage zone URL for a remote path.
-
-        Args:
-            remote_path: The unencoded remote path.
-
-        Returns:
-            URL.
-        """
-        return f"https://{STORAGE_HOST}/{self._zone}/{quote(remote_path)}"
+    def close(self) -> None:
+        """Close the client's connections."""
+        self._client.close()
 
     def upload(
         self,
@@ -70,20 +99,22 @@ class StorageClient:
             OSError: When the file can't be read.
             RequestFailedError: When bunny.net doesn't answer with HTTP 201,
                 such as when the file doesn't match its checksum.
+            RuntimeError: When the client has been closed.
         """
-        url = self.make_url(remote_path)
-
         headers = {
-            **self._headers,
             "Checksum": checksum,
         }
 
+        url = make_zone_url(
+            self._zone,
+            remote_path,
+        )
+
         with local_path.open("rb") as f:
-            response = httpx2.put(
+            response = self._client.put(
                 url,
                 content=f,
                 headers=headers,
-                timeout=self._timeout,
             )
 
         if response.status_code == 201:

@@ -1,8 +1,8 @@
-"""Unit tests for `StorageClient`."""
+"""Tests for URLs."""
 
 from pytest import mark
 
-from watershipup.storage_client import StorageClient
+from watershipup.urls import make_zone_url
 
 
 @mark.parametrize(
@@ -18,15 +18,11 @@ from watershipup.storage_client import StorageClient
         ),
     ],
 )
-def test_make_url(
+def test_make_zone_url(
     remote_path: str,
     expect: str,
 ) -> None:
-    """`make_url` must create a properly encoded URL."""
-    client = StorageClient(
-        password="",
-        zone="foo",
-    )
+    """`make_zone_url` must create a properly encoded URL."""
+    url = make_zone_url("foo", remote_path)
 
-    url = client.make_url(remote_path)
     assert url == expect

@@ -4,6 +4,8 @@ from collections.abc import Iterable
 
 from .local_file import LocalFile
 from .plan import Plan
+from .upload_round import UploadRound
+from .upload_rounds import round_of
 from .zone_file import ZoneFile
 
 
@@ -11,7 +13,7 @@ def make_plan(
     local_files: Iterable[LocalFile],
     zone_files: Iterable[ZoneFile],
 ) -> Plan:
-    """Plan which files to upload, and which to leave alone.
+    """Plan which files to upload, leave alone, delete, and keep.
 
     A file is uploaded unless the zone has one at the same path with the same checksum.
 
@@ -22,6 +24,9 @@ def make_plan(
     A file that doesn't have a checksum in the zone is uploaded again, rather than
     downloading it to hash and check.
 
+    A page or feed in the zone that's no longer in the directory is deleted. Any other
+    file that's no longer in the directory is kept.
+
     Args:
         local_files: The files in the directory to publish.
         zone_files: The files in the storage zone.
@@ -29,6 +34,9 @@ def make_plan(
     Returns:
         The plan.
     """
+    local_files = tuple(local_files)
+    zone_files = tuple(zone_files)
+
     zone_checksums = {
         zone_file.path: zone_file.checksum.upper()
         for zone_file in zone_files
@@ -46,7 +54,23 @@ def make_plan(
         else:
             uploads.append(local_file)
 
+    local_paths = {local_file.remote_path for local_file in local_files}
+
+    deletions: list[str] = []
+    kept: list[str] = []
+
+    for path in sorted(zone_file.path for zone_file in zone_files):
+        if path in local_paths:
+            continue
+
+        if round_of(path) in (UploadRound.PAGES, UploadRound.FEEDS):
+            deletions.append(path)
+        else:
+            kept.append(path)
+
     return Plan(
-        tuple(uploads),
-        tuple(unchanged),
+        deletions=tuple(deletions),
+        kept=tuple(kept),
+        unchanged=tuple(unchanged),
+        uploads=tuple(uploads),
     )

@@ -5,6 +5,7 @@ from pathlib import Path
 from mosey import Mosey
 
 from .local_file import LocalFile
+from .local_files import make_checksum
 
 
 def walk_local_directory(
@@ -14,6 +15,8 @@ def walk_local_directory(
 
     Symbolic links, and anything that isn't a regular file, are skipped.
 
+    Each file is read once, to record its checksum.
+
     Args:
         directory: Path to the directory to walk.
 
@@ -21,8 +24,8 @@ def walk_local_directory(
         Every discovered file.
 
     Raises:
-        OSError: When the directory or one of its subdirectories can't be
-            read.
+        OSError: When the directory, one of its subdirectories, or one of its
+            files can't be read.
         UnicodeEncodeError: When a file's path within the directory isn't
             valid UTF-8.
     """
@@ -37,6 +40,7 @@ def walk_local_directory(
             # encoding it raises `UnicodeEncodeError` before anything is
             # uploaded.
             step.relative_as_posix.encode().decode(),
+            make_checksum(step.path),
         )
         for step in walker.walk(directory)
     )

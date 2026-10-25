@@ -9,7 +9,64 @@ from pytest import mark, raises
 from watershipup.exceptions import RequestFailedError
 from watershipup.storage_client import StorageClient
 
-from .storage_zone import environment_variable, read_storage
+from .storage_zone import environment_variable, is_stored, read_storage
+
+
+@mark.parametrize(
+    "remote_path",
+    [
+        "test_delete.txt",
+        "test_delete/file +#%41.txt",
+    ],
+)
+def test_delete(
+    client: StorageClient,
+    remote_path: str,
+    tmp_path: Path,
+) -> None:
+    """`delete` must remove the file from the zone."""
+    local_path = tmp_path / "file.txt"
+    local_path.write_text("Hello, world!")
+
+    checksum = sha256(local_path.read_bytes()).hexdigest().upper()
+
+    client.upload(
+        local_path,
+        remote_path,
+        checksum=checksum,
+    )
+
+    stored_before = is_stored(remote_path)
+    client.delete(remote_path)
+    stored_after = is_stored(remote_path)
+
+    assert stored_before
+    assert not stored_after
+
+
+def test_delete_missing(
+    client: StorageClient,
+) -> None:
+    """`delete` must succeed when the file is already gone."""
+    # The first delete makes sure the file is gone, whatever the zone held.
+    client.delete("test_delete_missing.txt")
+    client.delete("test_delete_missing.txt")
+
+
+def test_delete_wrong_password() -> None:
+    """`delete` must raise `RequestFailedError` when the zone refuses the password."""
+    with (
+        StorageClient(
+            password="not-the-password",
+            zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
+        ) as client,
+        raises(RequestFailedError) as ex,
+    ):
+        client.delete("test_delete_wrong_password.txt")
+
+    assert ex.value.method == "DELETE"
+    assert ex.value.path == "test_delete_wrong_password.txt"
+    assert ex.value.status == 401
 
 
 @mark.parametrize(

@@ -1,6 +1,6 @@
 """Tests for URLs."""
 
-from pytest import mark
+from pytest import mark, raises
 
 from watershipup.urls import make_zone_url
 
@@ -26,3 +26,17 @@ def test_make_zone_url(
     url = make_zone_url("foo", remote_path)
 
     assert url == expect
+
+
+@mark.parametrize(
+    "remote_path",
+    [
+        ".",
+        "css/..",
+        "../index.html",
+    ],
+)
+def test_make_zone_url_refuses_dot_segment(remote_path: str) -> None:
+    """`make_zone_url` must refuse a path with a "." or ".." segment."""
+    with raises(ValueError, match="dot segment"):
+        make_zone_url("foo", remote_path)

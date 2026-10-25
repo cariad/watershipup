@@ -17,5 +17,13 @@ def make_zone_url(
 
     Returns:
         URL.
+
+    Raises:
+        ValueError: When the path has a "." or ".." segment.
     """
+    if {".", ".."} & set(remote_path.split("/")):
+        raise ValueError(
+            f"Won't make a URL for a path with a dot segment: {remote_path!r}"
+        )
+
     return f"https://{STORAGE_HOST}/{zone}/{quote(remote_path)}"

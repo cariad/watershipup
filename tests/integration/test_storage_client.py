@@ -8,8 +8,10 @@ from pytest import mark, raises
 from tests.checksum_helpers import checksum_of
 from watershipup.exceptions import RequestFailedError
 from watershipup.storage_client import StorageClient
+from watershipup.zone_file import ZoneFile
+from watershipup.zone_listing import ZoneListing
 
-from .storage_zone import environment_variable, is_stored, read_storage
+from .storage_zone import is_stored, read_storage
 
 
 @mark.parametrize(
@@ -53,19 +55,123 @@ def test_delete_missing(
     client.delete("test_delete_missing.txt")
 
 
-def test_delete_wrong_password() -> None:
+def test_delete_wrong_password(
+    wrong_password_client: StorageClient,
+) -> None:
     """`delete` must raise `RequestFailedError` when the zone refuses the password."""
-    with (
-        StorageClient(
-            password="not-the-password",
-            zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
-        ) as client,
-        raises(RequestFailedError) as ex,
-    ):
-        client.delete("test_delete_wrong_password.txt")
+    with raises(RequestFailedError) as ex:
+        wrong_password_client.delete("test_delete_wrong_password.txt")
 
     assert ex.value.method == "DELETE"
     assert ex.value.path == "test_delete_wrong_password.txt"
+    assert ex.value.status == 401
+
+
+def test_list(
+    client: StorageClient,
+    tmp_path: Path,
+) -> None:
+    """`list_directory` must find a directory's files and subdirectories."""
+    # Different on every run, so a file left by an earlier run can't pass.
+    contents = {
+        "test_list_directory/a.txt": uuid4().bytes,
+        "test_list_directory/b.txt": uuid4().bytes,
+        "test_list_directory/sub/c.txt": uuid4().bytes,
+    }
+
+    for remote_path, content in contents.items():
+        local_path = tmp_path / "file.txt"
+        local_path.write_bytes(content)
+
+        client.upload(
+            local_path,
+            remote_path,
+            checksum=checksum_of(content),
+        )
+
+    listing = client.list_directory("test_list_directory/")
+
+    # Only the paths this test uploads, so an entry left by an earlier version of the
+    # test can't fail it.
+    #
+    # bunny.net's order isn't relied on.
+    found = (
+        {file for file in listing.files if file.path in contents},
+        set(listing.directories) & {"test_list_directory/sub/"},
+    )
+
+    expect = (
+        {
+            ZoneFile(
+                "test_list_directory/a.txt",
+                checksum_of(contents["test_list_directory/a.txt"]),
+                "",
+            ),
+            ZoneFile(
+                "test_list_directory/b.txt",
+                checksum_of(contents["test_list_directory/b.txt"]),
+                "",
+            ),
+        },
+        {
+            "test_list_directory/sub/",
+        },
+    )
+
+    assert found == expect
+
+
+def test_list_directory_missing(
+    client: StorageClient,
+) -> None:
+    """`list_directory` must find nothing in a directory that doesn't exist."""
+    listing = client.list_directory("test_list_directory_missing/")
+    expect = ZoneListing(
+        (),
+        (),
+    )
+
+    assert listing == expect
+
+
+def test_list_directory_root(
+    client: StorageClient,
+    tmp_path: Path,
+) -> None:
+    """`list_directory` must find a file in the zone's root."""
+    # Different on every run, so a file left by an earlier run can't pass.
+    content = uuid4().bytes
+    checksum = checksum_of(content)
+
+    local_path = tmp_path / "file.txt"
+    local_path.write_bytes(content)
+
+    client.upload(
+        local_path,
+        "test_list_root.txt",
+        checksum=checksum,
+    )
+
+    listing = client.list_directory("")
+
+    expect = ZoneFile(
+        "test_list_root.txt",
+        checksum,
+        "",
+    )
+
+    assert expect in listing.files
+
+
+def test_list_directory_wrong_password(
+    wrong_password_client: StorageClient,
+) -> None:
+    """`list_directory` must raise `RequestFailedError` when the password's wrong."""
+    with raises(RequestFailedError) as ex:
+        wrong_password_client.list_directory("test_list_directory_wrong_password/")
+
+    assert ex.value.method == "GET"
+    assert ex.value.path == "test_list_directory_wrong_password/"
     assert ex.value.status == 401
 
 
@@ -155,6 +261,7 @@ def test_upload_wrong_checksum(
 
 def test_upload_wrong_password(
     tmp_path: Path,
+    wrong_password_client: StorageClient,
 ) -> None:
     """`upload` must raise `RequestFailedError` when the zone refuses the password."""
     local_path = tmp_path / "file.txt"
@@ -162,14 +269,8 @@ def test_upload_wrong_password(
 
     checksum = checksum_of(local_path.read_bytes())
 
-    with (
-        StorageClient(
-            password="not-the-password",
-            zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
-        ) as client,
-        raises(RequestFailedError) as ex,
-    ):
-        client.upload(
+    with raises(RequestFailedError) as ex:
+        wrong_password_client.upload(
             local_path,
             "test_upload_wrong_password.txt",
             checksum=checksum,

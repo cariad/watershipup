@@ -21,3 +21,17 @@ def client() -> Iterator[StorageClient]:
         zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
     ) as client:
         yield client
+
+
+@fixture
+def wrong_password_client() -> Iterator[StorageClient]:
+    """Make a client for the test storage zone with the wrong password.
+
+    Yields:
+        A client whose password the test storage zone refuses.
+    """
+    with StorageClient(
+        password="not-the-password",
+        zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
+    ) as client:
+        yield client

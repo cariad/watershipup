@@ -28,3 +28,17 @@ def test_request_failed_error_str() -> None:
     expect = "PUT 'css/site.css' failed with 401 Unauthorized"
 
     assert str(error) == expect
+
+
+def test_request_failed_error_str_root() -> None:
+    """A `RequestFailedError` for the zone's root must name the root, not ''."""
+    error = RequestFailedError(
+        "GET",
+        "",
+        401,
+        "Unauthorized",
+    )
+
+    expect = "GET the zone's root failed with 401 Unauthorized"
+
+    assert str(error) == expect

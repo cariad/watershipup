@@ -8,7 +8,7 @@ class RequestFailedError(WatershipupError):
 
     Attributes:
         method: The request's method, such as "PUT".
-        path: The path in the storage zone, such as "css/site.css".
+        path: The path in the storage zone, such as "css/site.css", or "" for its root.
         status: The response's status code, such as 401.
         reason: The response's reason phrase, such as "Unauthorized".
     """
@@ -24,7 +24,7 @@ class RequestFailedError(WatershipupError):
 
         Args:
             method: The request's method, such as "PUT".
-            path: The path in the storage zone, such as "css/site.css".
+            path: The path in the storage zone, or "" for its root.
             status: The response's status code, such as 401.
             reason: The response's reason phrase, such as "Unauthorized".
         """
@@ -36,4 +36,6 @@ class RequestFailedError(WatershipupError):
 
     def __str__(self) -> str:
         """Describe the failed request on one line."""
-        return f"{self.method} {self.path!r} failed with {self.status} {self.reason}"
+        # The zone's root has the path "", which would read as ''.
+        path = repr(self.path) if self.path else "the zone's root"
+        return f"{self.method} {path} failed with {self.status} {self.reason}"

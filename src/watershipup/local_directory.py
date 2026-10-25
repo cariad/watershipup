@@ -4,8 +4,9 @@ from pathlib import Path
 
 from mosey import Mosey
 
+from .exceptions import HiddenPathError
 from .local_file import LocalFile
-from .local_files import make_checksum
+from .local_files import is_hidden, make_checksum
 
 
 def walk_local_directory(
@@ -17,6 +18,8 @@ def walk_local_directory(
 
     Each file is read once, to record its checksum.
 
+    Hidden files aren't read.
+
     Args:
         directory: Path to the directory to walk.
 
@@ -24,6 +27,8 @@ def walk_local_directory(
         Every discovered file.
 
     Raises:
+        HiddenPathError: When the directory holds any hidden file or
+            directory, other than `.well-known` at its root.
         OSError: When the directory, one of its subdirectories, or one of its
             files can't be read.
         UnicodeEncodeError: When a file's path within the directory isn't
@@ -33,16 +38,22 @@ def walk_local_directory(
     builder.ignore_symlinks()
     walker = builder.build()
 
-    found_files = (
-        LocalFile(
+    found_files: list[LocalFile] = []
+
+    for step in walker.walk(directory):
+        # A path that isn't valid UTF-8 can't be a storage zone path, so
+        # encoding it raises `UnicodeEncodeError` before anything is uploaded.
+        remote_path = step.relative_as_posix.encode().decode()
+
+        if is_hidden(remote_path):
+            raise HiddenPathError(step.path)
+
+        local_file = LocalFile(
             step.path,
-            # A path that isn't valid UTF-8 can't be a storage zone path, so
-            # encoding it raises `UnicodeEncodeError` before anything is
-            # uploaded.
-            step.relative_as_posix.encode().decode(),
+            remote_path,
             make_checksum(step.path),
         )
-        for step in walker.walk(directory)
-    )
+
+        found_files.append(local_file)
 
     return tuple(found_files)

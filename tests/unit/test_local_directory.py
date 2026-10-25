@@ -7,6 +7,8 @@ from pathlib import Path
 
 from pytest import mark, raises
 
+from tests.file_helpers import touch_files
+from watershipup.exceptions import HiddenPathError
 from watershipup.local_directory import walk_local_directory
 from watershipup.local_file import LocalFile
 
@@ -16,24 +18,15 @@ EMPTY_SHA256 = sha256(b"").hexdigest().upper()
 
 def test_walk_local_directory(tmp_path: Path) -> None:
     """`walk_local_directory` must find every file, sorted by path."""
-    test_paths = [
+    touch_files(
+        tmp_path,
         "index.html",
         "css/site.css",
         "css/fonts/sans.woff2",
         "css.txt",
         "a.txt",
         ".well-known/security.txt",
-    ]
-
-    for path in test_paths:
-        this_path = tmp_path / path
-
-        this_path.parent.mkdir(
-            exist_ok=True,
-            parents=True,
-        )
-
-        this_path.touch()
+    )
 
     assert walk_local_directory(tmp_path) == (
         LocalFile(
@@ -107,6 +100,38 @@ def test_walk_local_directory_raises_when_file_unreadable(
         path.chmod(0o644)
 
 
+def test_walk_local_directory_raises_when_hidden(tmp_path: Path) -> None:
+    """`walk_local_directory` must raise with the path of a hidden file."""
+    touch_files(
+        tmp_path,
+        "index.html",
+        "css/.DS_Store",
+    )
+
+    with raises(HiddenPathError) as error:
+        walk_local_directory(tmp_path)
+
+    hidden = error.value.path
+    expect = tmp_path / "css/.DS_Store"
+
+    assert hidden == expect
+
+
+def test_walk_local_directory_raises_when_hidden_without_reading(
+    tmp_path: Path,
+) -> None:
+    """`walk_local_directory` must refuse a hidden file without reading it."""
+    path = tmp_path / ".env"
+    path.touch()
+    path.chmod(0o000)
+
+    try:
+        with raises(HiddenPathError):
+            walk_local_directory(tmp_path)
+    finally:
+        path.chmod(0o644)
+
+
 def test_walk_local_directory_raises_when_missing(tmp_path: Path) -> None:
     """`walk_local_directory` must raise when the directory doesn't exist."""
     with raises(FileNotFoundError):
@@ -119,7 +144,10 @@ def test_walk_local_directory_raises_when_missing(tmp_path: Path) -> None:
 )
 def test_walk_local_directory_raises_when_name_not_utf8(tmp_path: Path) -> None:
     """`walk_local_directory` must raise when a name isn't valid UTF-8."""
-    (tmp_path / os.fsdecode(b"caf\xe9.html")).touch()
+    touch_files(
+        tmp_path,
+        os.fsdecode(b"caf\xe9.html"),
+    )
 
     with raises(UnicodeEncodeError):
         walk_local_directory(tmp_path)
@@ -127,11 +155,13 @@ def test_walk_local_directory_raises_when_name_not_utf8(tmp_path: Path) -> None:
 
 def test_walk_local_directory_raises_when_not_a_directory(tmp_path: Path) -> None:
     """`walk_local_directory` must raise when the path isn't a directory."""
-    path = tmp_path / "index.html"
-    path.touch()
+    touch_files(
+        tmp_path,
+        "index.html",
+    )
 
     with raises(NotADirectoryError):
-        walk_local_directory(path)
+        walk_local_directory(tmp_path / "index.html")
 
 
 def test_walk_local_directory_raises_when_subdirectory_unreadable(
@@ -151,7 +181,11 @@ def test_walk_local_directory_raises_when_subdirectory_unreadable(
 
 def test_walk_local_directory_skips_broken_symlinks(tmp_path: Path) -> None:
     """`walk_local_directory` must skip broken symbolic links."""
-    (tmp_path / "index.html").touch()
+    touch_files(
+        tmp_path,
+        "index.html",
+    )
+
     (tmp_path / "old.html").symlink_to(tmp_path / "missing.html")
 
     assert walk_local_directory(tmp_path) == (
@@ -165,7 +199,11 @@ def test_walk_local_directory_skips_broken_symlinks(tmp_path: Path) -> None:
 
 def test_walk_local_directory_skips_named_pipes(tmp_path: Path) -> None:
     """`walk_local_directory` must skip named pipes."""
-    (tmp_path / "index.html").touch()
+    touch_files(
+        tmp_path,
+        "index.html",
+    )
+
     os.mkfifo(tmp_path / "pipe")
 
     assert walk_local_directory(tmp_path) == (
@@ -181,13 +219,14 @@ def test_walk_local_directory_skips_symlinks_to_directories(
     tmp_path: Path,
 ) -> None:
     """`walk_local_directory` must skip symbolic links to directories."""
-    target = tmp_path / "target"
-    target.mkdir()
-    (target / "file.txt").touch()
+    touch_files(
+        tmp_path,
+        "target/file.txt",
+        "public/index.html",
+    )
 
+    target = tmp_path / "target"
     directory = tmp_path / "public"
-    directory.mkdir()
-    (directory / "index.html").touch()
 
     (directory / "directory-symlink").symlink_to(
         target,
@@ -205,12 +244,15 @@ def test_walk_local_directory_skips_symlinks_to_directories(
 
 def test_walk_local_directory_skips_symlinks_to_files(tmp_path: Path) -> None:
     """`walk_local_directory` must skip symbolic links to files."""
-    target = tmp_path / "file.txt"
-    target.touch()
+    touch_files(
+        tmp_path,
+        "file.txt",
+        "public/index.html",
+    )
 
+    target = tmp_path / "file.txt"
     directory = tmp_path / "public"
-    directory.mkdir()
-    (directory / "index.html").touch()
+
     (directory / "file-symlink.txt").symlink_to(target)
 
     assert walk_local_directory(directory) == (

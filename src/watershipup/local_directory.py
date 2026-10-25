@@ -4,9 +4,9 @@ from pathlib import Path
 
 from mosey import Mosey
 
-from .exceptions import HiddenPathError, NoFilesError
+from .exceptions import HiddenPathError, InvalidNameError, NoFilesError
 from .local_file import LocalFile
-from .local_files import is_hidden, make_checksum
+from .local_files import has_invalid_name, is_hidden, make_checksum
 
 
 def walk_local_directory(
@@ -29,6 +29,7 @@ def walk_local_directory(
     Raises:
         HiddenPathError: When the directory holds any hidden file or
             directory, other than `.well-known` at its root.
+        InvalidNameError: When a name in a file's path would be rejected by bunny.net.
         NoFilesError: When the directory has no files to publish.
         OSError: When the directory, one of its subdirectories, or one of its
             files can't be read.
@@ -48,6 +49,9 @@ def walk_local_directory(
 
         if is_hidden(remote_path):
             raise HiddenPathError(step.path)
+
+        if has_invalid_name(remote_path):
+            raise InvalidNameError(step.path)
 
         local_file = LocalFile(
             step.path,

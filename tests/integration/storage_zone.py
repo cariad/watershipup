@@ -10,7 +10,7 @@ import os
 import httpx2
 from pytest import fail
 
-from watershipup.storage_client import StorageClient
+from watershipup.urls import make_zone_url
 
 
 def environment_variable(name: str) -> str:
@@ -35,20 +35,19 @@ def environment_variable(name: str) -> str:
 
 
 def read_storage(
-    client: StorageClient,
     path: str,
 ) -> bytes:
     """Download a file from the test zone.
 
     Args:
-        client: The client that uploaded the file.
         path: The file's path in the zone.
 
     Returns:
         The file's bytes.
     """
     password = environment_variable("WATERSHIPUP_TEST_PASSWORD")
-    url = client.make_url(path)
+    zone = environment_variable("WATERSHIPUP_TEST_ZONE")
+    url = make_zone_url(zone, path)
 
     response = httpx2.get(
         url,

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from mosey import Mosey
 
-from .exceptions import HiddenPathError
+from .exceptions import HiddenPathError, NoFilesError
 from .local_file import LocalFile
 from .local_files import is_hidden, make_checksum
 
@@ -29,6 +29,7 @@ def walk_local_directory(
     Raises:
         HiddenPathError: When the directory holds any hidden file or
             directory, other than `.well-known` at its root.
+        NoFilesError: When the directory has no files to publish.
         OSError: When the directory, one of its subdirectories, or one of its
             files can't be read.
         UnicodeEncodeError: When a file's path within the directory isn't
@@ -55,5 +56,8 @@ def walk_local_directory(
         )
 
         found_files.append(local_file)
+
+    if not found_files:
+        raise NoFilesError(directory)
 
     return tuple(found_files)

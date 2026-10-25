@@ -2,17 +2,17 @@
 
 import os
 import sys
-from hashlib import sha256
 from pathlib import Path
 
 from pytest import mark, raises
 
+from tests.checksum_helpers import checksum_of
 from tests.file_helpers import touch_files
 from watershipup.exceptions import HiddenPathError, InvalidNameError, NoFilesError
 from watershipup.local_directory import walk_local_directory
 from watershipup.local_file import LocalFile
 
-EMPTY_SHA256 = sha256(b"").hexdigest().upper()
+EMPTY_SHA256 = checksum_of(b"")
 """The SHA-256 of an empty file."""
 
 
@@ -73,12 +73,12 @@ def test_walk_local_directory_hashes_files(tmp_path: Path) -> None:
         LocalFile(
             tmp_path / "a.txt",
             "a.txt",
-            sha256(b"made-up a").hexdigest().upper(),
+            checksum_of(b"made-up a"),
         ),
         LocalFile(
             tmp_path / "b.txt",
             "b.txt",
-            sha256(b"made-up b").hexdigest().upper(),
+            checksum_of(b"made-up b"),
         ),
     )
 

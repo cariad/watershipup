@@ -1,10 +1,10 @@
 """Tests for local files."""
 
-from hashlib import sha256
 from pathlib import Path
 
 from pytest import mark
 
+from tests.checksum_helpers import checksum_of
 from watershipup.local_files import has_invalid_name, is_hidden, make_checksum
 
 
@@ -87,6 +87,6 @@ def test_make_checksum(tmp_path: Path) -> None:
     path.write_bytes(b"made-up content")
 
     checksum = make_checksum(path)
-    expect = sha256(b"made-up content").hexdigest().upper()
+    expect = checksum_of(b"made-up content")
 
     assert checksum == expect

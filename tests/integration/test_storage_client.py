@@ -1,11 +1,11 @@
 """Integration tests for `StorageClient`."""
 
-from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
 from pytest import mark, raises
 
+from tests.checksum_helpers import checksum_of
 from watershipup.exceptions import RequestFailedError
 from watershipup.storage_client import StorageClient
 
@@ -28,7 +28,7 @@ def test_delete(
     local_path = tmp_path / "file.txt"
     local_path.write_text("Hello, world!")
 
-    checksum = sha256(local_path.read_bytes()).hexdigest().upper()
+    checksum = checksum_of(local_path.read_bytes())
 
     client.upload(
         local_path,
@@ -84,7 +84,7 @@ def test_upload(
     """`upload` must store the file's bytes at its path in the zone."""
     # Different on every run, so a file left by an earlier run can't pass.
     content = uuid4().bytes
-    checksum = sha256(content).hexdigest().upper()
+    checksum = checksum_of(content)
 
     local_path = tmp_path / "file.txt"
     local_path.write_bytes(content)
@@ -115,7 +115,7 @@ def test_upload_two_files(
 
     # One client for both, so the second upload can reuse the first's connection.
     for remote_path, content in expect.items():
-        checksum = sha256(content).hexdigest().upper()
+        checksum = checksum_of(content)
 
         local_path = tmp_path / "file.txt"
         local_path.write_bytes(content)
@@ -139,7 +139,7 @@ def test_upload_wrong_checksum(
     local_path = tmp_path / "file.txt"
     local_path.write_text("Hello, world!")
 
-    checksum = sha256(b"Something else").hexdigest().upper()
+    checksum = checksum_of(b"Something else")
 
     with raises(RequestFailedError) as ex:
         client.upload(
@@ -160,7 +160,7 @@ def test_upload_wrong_password(
     local_path = tmp_path / "file.txt"
     local_path.write_text("Hello, world!")
 
-    checksum = sha256(local_path.read_bytes()).hexdigest().upper()
+    checksum = checksum_of(local_path.read_bytes())
 
     with (
         StorageClient(

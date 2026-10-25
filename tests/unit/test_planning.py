@@ -29,6 +29,73 @@ def _local_file(remote_path: str, content: bytes) -> LocalFile:
     )
 
 
+def test_make_plan_accepts_iterators() -> None:
+    """`make_plan` must plan from iterators, which it can read only once."""
+    index = _local_file(
+        "index.html",
+        b"made-up index",
+    )
+
+    plan = make_plan(
+        iter([index]),
+        iter(
+            [
+                ZoneFile(
+                    "index.html",
+                    checksum_of(b"made-up index"),
+                    "",
+                ),
+                ZoneFile(
+                    "old.html",
+                    checksum_of(b"made-up old page"),
+                    "",
+                ),
+            ],
+        ),
+    )
+
+    expect = Plan(
+        deletions=("old.html",),
+        kept=(),
+        unchanged=("index.html",),
+        uploads=(),
+    )
+
+    assert plan == expect
+
+
+@mark.parametrize(
+    "zone_path",
+    [
+        "old.html",
+        "OLD.HTML",
+        "feed.xml",
+        "blog/Feed.Xml",
+        "notes.txt",
+        "Notes.TXT",
+        "search.json",
+        "Search.JSON",
+        "site.webmanifest",
+        "Site.WebManifest",
+    ],
+)
+def test_make_plan_deletes_pages_and_feeds(zone_path: str) -> None:
+    """`make_plan` must delete a page or feed that's no longer in the directory."""
+    plan = make_plan(
+        [],
+        [ZoneFile(zone_path, checksum_of(b"made-up old file"), "")],
+    )
+
+    expect = Plan(
+        deletions=(zone_path,),
+        kept=(),
+        unchanged=(),
+        uploads=(),
+    )
+
+    assert plan == expect
+
+
 @mark.parametrize(
     ["local_checksum", "zone_checksum"],
     [
@@ -46,7 +113,47 @@ def test_make_plan_ignores_checksum_case(
         [ZoneFile("index.html", zone_checksum, "")],
     )
 
-    expect = Plan((), ("index.html",))
+    expect = Plan(
+        deletions=(),
+        kept=(),
+        unchanged=("index.html",),
+        uploads=(),
+    )
+
+    assert plan == expect
+
+
+@mark.parametrize(
+    "zone_path",
+    [
+        "img/photo.jpg",
+        "css/site.css",
+        "js/app.js",
+        "guide.pdf",
+        "favicon.ico",
+        "js/app.js.map",
+        "README",
+    ],
+)
+def test_make_plan_keeps_other_files(zone_path: str) -> None:
+    """`make_plan` must keep an asset that's no longer in the directory."""
+    plan = make_plan(
+        [],
+        [
+            ZoneFile(
+                zone_path,
+                checksum_of(b"made-up old file"),
+                "",
+            ),
+        ],
+    )
+
+    expect = Plan(
+        deletions=(),
+        kept=(zone_path,),
+        unchanged=(),
+        uploads=(),
+    )
 
     assert plan == expect
 
@@ -71,7 +178,12 @@ def test_make_plan_leaves_unchanged_file() -> None:
         ],
     )
 
-    expect = Plan((), ("index.html",))
+    expect = Plan(
+        deletions=(),
+        kept=(),
+        unchanged=("index.html",),
+        uploads=(),
+    )
 
     assert plan == expect
 
@@ -95,7 +207,12 @@ def test_make_plan_matches_paths_exactly(local_path: str, zone_path: str) -> Non
         [ZoneFile(zone_path, checksum_of(b"made-up page"), "")],
     )
 
-    expect = Plan((local_file,), ())
+    expect = Plan(
+        deletions=(zone_path,),
+        kept=(),
+        unchanged=(),
+        uploads=(local_file,),
+    )
 
     assert plan == expect
 
@@ -116,7 +233,34 @@ def test_make_plan_sorts_by_path() -> None:
         ],
     )
 
-    expect = Plan((a, b), ("c.css", "d.css"))
+    expect = Plan(
+        deletions=(),
+        kept=(),
+        unchanged=("c.css", "d.css"),
+        uploads=(a, b),
+    )
+
+    assert plan == expect
+
+
+def test_make_plan_sorts_deletions_and_kept() -> None:
+    """`make_plan` must sort the files it deletes and keeps by storage zone path."""
+    plan = make_plan(
+        [],
+        [
+            ZoneFile("b.html", checksum_of(b"made-up b"), ""),
+            ZoneFile("d.css", checksum_of(b"made-up d"), ""),
+            ZoneFile("a.html", checksum_of(b"made-up a"), ""),
+            ZoneFile("c.css", checksum_of(b"made-up c"), ""),
+        ],
+    )
+
+    expect = Plan(
+        deletions=("a.html", "b.html"),
+        kept=("c.css", "d.css"),
+        unchanged=(),
+        uploads=(),
+    )
 
     assert plan == expect
 
@@ -130,7 +274,12 @@ def test_make_plan_uploads_changed_file() -> None:
         [ZoneFile("index.html", checksum_of(b"made-up old index"), "")],
     )
 
-    expect = Plan((index,), ())
+    expect = Plan(
+        deletions=(),
+        kept=(),
+        unchanged=(),
+        uploads=(index,),
+    )
 
     assert plan == expect
 
@@ -147,7 +296,12 @@ def test_make_plan_uploads_file_without_checksum() -> None:
         [ZoneFile("index.html", None, "")],
     )
 
-    expect = Plan((index,), ())
+    expect = Plan(
+        deletions=(),
+        kept=(),
+        unchanged=(),
+        uploads=(index,),
+    )
 
     assert plan == expect
 
@@ -165,8 +319,10 @@ def test_make_plan_uploads_new_file() -> None:
     )
 
     expect = Plan(
-        (index,),
-        (),
+        deletions=(),
+        kept=(),
+        unchanged=(),
+        uploads=(index,),
     )
 
     assert plan == expect

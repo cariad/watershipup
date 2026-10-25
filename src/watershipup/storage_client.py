@@ -9,6 +9,8 @@ import httpx2
 
 from .exceptions import RequestFailedError
 from .urls import make_zone_url
+from .zone_listing import ZoneListing
+from .zone_listings import is_valid_directory, parse_listing
 
 
 class StorageClient:
@@ -75,6 +77,30 @@ class StorageClient:
 
         self._zone = zone
 
+    @staticmethod
+    def _check_status(
+        response: httpx2.Response,
+        remote_path: str,
+        *statuses: int,
+    ) -> None:
+        """Check that bunny.net answered a request with an expected status.
+
+        Args:
+            response: bunny.net's response.
+            remote_path: Storage zone path that the request was for.
+            *statuses: The statuses that mean the request succeeded.
+
+        Raises:
+            RequestFailedError: When the response's status isn't one of them.
+        """
+        if response.status_code not in statuses:
+            raise RequestFailedError(
+                response.request.method,
+                remote_path,
+                response.status_code,
+                response.reason_phrase,
+            )
+
     def close(self) -> None:
         """Close the client's connections."""
         self._client.close()
@@ -112,14 +138,53 @@ class StorageClient:
 
         response = self._client.delete(url)
 
-        if response.status_code in (200, 404):
-            return
-
-        raise RequestFailedError(
-            "DELETE",
+        self._check_status(
+            response,
             remote_path,
-            response.status_code,
-            response.reason_phrase,
+            200,
+            404,
+        )
+
+    def list_directory(
+        self,
+        directory: str,
+    ) -> ZoneListing:
+        """List one directory in the zone.
+
+        A directory that doesn't exist lists as empty.
+
+        Args:
+            directory: "" for the zone's root, or a path ending in "/".
+
+        Returns:
+            The directory's files and subdirectories.
+
+        Raises:
+            httpx2.RequestError: When bunny.net can't be reached, or its response can't
+                be read.
+            RequestFailedError: When bunny.net doesn't answer with HTTP 200.
+            RuntimeError: When the client has been closed.
+            ValueError: When the directory or its listing is invalid.
+        """
+        if not is_valid_directory(directory):
+            raise ValueError(f"Not a directory's path: {directory!r}")
+
+        url = make_zone_url(
+            self._zone,
+            directory,
+        )
+
+        response = self._client.get(url)
+
+        self._check_status(
+            response,
+            directory,
+            200,
+        )
+
+        return parse_listing(
+            directory,
+            response.content,
         )
 
     def upload(
@@ -161,12 +226,8 @@ class StorageClient:
                 headers=headers,
             )
 
-        if response.status_code == 201:
-            return
-
-        raise RequestFailedError(
-            "PUT",
+        self._check_status(
+            response,
             remote_path,
-            response.status_code,
-            response.reason_phrase,
+            201,
         )

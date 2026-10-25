@@ -249,12 +249,6 @@ def test_parse_listing_refuses_body(content: bytes) -> None:
         parse_listing("", content)
 
 
-def test_parse_listing_refuses_directory() -> None:
-    """`parse_listing` must refuse a malformed directory path, like "css"."""
-    with raises(ValueError, match="Not a directory's path"):
-        parse_listing("css", b"[]")
-
-
 @mark.parametrize(
     "entries",
     [

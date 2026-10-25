@@ -65,11 +65,8 @@ def parse_listing(
         The directory's files and subdirectories.
 
     Raises:
-        ValueError: When the directory or content is invalid.
+        ValueError: When the content is invalid.
     """
-    if not is_valid_directory(directory):
-        raise ValueError(f"Not a directory's path: {directory!r}")
-
     entries: object = json.loads(content)
 
     if not isinstance(entries, list):

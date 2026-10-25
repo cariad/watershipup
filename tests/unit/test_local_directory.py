@@ -8,7 +8,7 @@ from pathlib import Path
 from pytest import mark, raises
 
 from tests.file_helpers import touch_files
-from watershipup.exceptions import HiddenPathError
+from watershipup.exceptions import HiddenPathError, NoFilesError
 from watershipup.local_directory import walk_local_directory
 from watershipup.local_file import LocalFile
 
@@ -83,6 +83,32 @@ def test_walk_local_directory_hashes_files(tmp_path: Path) -> None:
     )
 
     assert local_files == expect
+
+
+@mark.parametrize(
+    "subdirectories",
+    [
+        (),
+        ("css",),
+        ("css/fonts",),
+        (".well-known",),
+    ],
+)
+def test_walk_local_directory_raises_when_empty(
+    subdirectories: tuple[str, ...],
+    tmp_path: Path,
+) -> None:
+    """`walk_local_directory` must raise when there are no files to publish."""
+    for subdirectory in subdirectories:
+        (tmp_path / subdirectory).mkdir(parents=True)
+
+    with raises(NoFilesError) as error:
+        walk_local_directory(tmp_path)
+
+    directory = error.value.directory
+    expect = tmp_path
+
+    assert directory == expect
 
 
 def test_walk_local_directory_raises_when_file_unreadable(

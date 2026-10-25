@@ -43,12 +43,12 @@ def test_make_plan_accepts_iterators() -> None:
                 ZoneFile(
                     "index.html",
                     checksum_of(b"made-up index"),
-                    "",
+                    None,
                 ),
                 ZoneFile(
                     "old.html",
                     checksum_of(b"made-up old page"),
-                    "",
+                    None,
                 ),
             ],
         ),
@@ -83,7 +83,13 @@ def test_make_plan_deletes_pages_and_feeds(zone_path: str) -> None:
     """`make_plan` must delete a page or feed that's no longer in the directory."""
     plan = make_plan(
         [],
-        [ZoneFile(zone_path, checksum_of(b"made-up old file"), "")],
+        [
+            ZoneFile(
+                zone_path,
+                checksum_of(b"made-up old file"),
+                None,
+            ),
+        ],
     )
 
     expect = Plan(
@@ -110,7 +116,13 @@ def test_make_plan_ignores_checksum_case(
     """`make_plan` must match checksums whatever their case."""
     plan = make_plan(
         [LocalFile(Path("public/index.html"), "index.html", local_checksum)],
-        [ZoneFile("index.html", zone_checksum, "")],
+        [
+            ZoneFile(
+                "index.html",
+                zone_checksum,
+                None,
+            ),
+        ],
     )
 
     expect = Plan(
@@ -143,7 +155,7 @@ def test_make_plan_keeps_other_files(zone_path: str) -> None:
             ZoneFile(
                 zone_path,
                 checksum_of(b"made-up old file"),
-                "",
+                None,
             ),
         ],
     )
@@ -173,7 +185,7 @@ def test_make_plan_leaves_unchanged_file() -> None:
             ZoneFile(
                 "index.html",
                 checksum_of(b"made-up index"),
-                "",
+                None,
             ),
         ],
     )
@@ -204,7 +216,13 @@ def test_make_plan_matches_paths_exactly(local_path: str, zone_path: str) -> Non
 
     plan = make_plan(
         [local_file],
-        [ZoneFile(zone_path, checksum_of(b"made-up page"), "")],
+        [
+            ZoneFile(
+                zone_path,
+                checksum_of(b"made-up page"),
+                None,
+            ),
+        ],
     )
 
     expect = Plan(
@@ -228,8 +246,16 @@ def test_make_plan_sorts_by_path() -> None:
     plan = make_plan(
         [d, b, c, a],
         [
-            ZoneFile("d.css", checksum_of(b"made-up d"), ""),
-            ZoneFile("c.css", checksum_of(b"made-up c"), ""),
+            ZoneFile(
+                "d.css",
+                checksum_of(b"made-up d"),
+                None,
+            ),
+            ZoneFile(
+                "c.css",
+                checksum_of(b"made-up c"),
+                None,
+            ),
         ],
     )
 
@@ -248,10 +274,26 @@ def test_make_plan_sorts_deletions_and_kept() -> None:
     plan = make_plan(
         [],
         [
-            ZoneFile("b.html", checksum_of(b"made-up b"), ""),
-            ZoneFile("d.css", checksum_of(b"made-up d"), ""),
-            ZoneFile("a.html", checksum_of(b"made-up a"), ""),
-            ZoneFile("c.css", checksum_of(b"made-up c"), ""),
+            ZoneFile(
+                "b.html",
+                checksum_of(b"made-up b"),
+                None,
+            ),
+            ZoneFile(
+                "d.css",
+                checksum_of(b"made-up d"),
+                None,
+            ),
+            ZoneFile(
+                "a.html",
+                checksum_of(b"made-up a"),
+                None,
+            ),
+            ZoneFile(
+                "c.css",
+                checksum_of(b"made-up c"),
+                None,
+            ),
         ],
     )
 
@@ -271,7 +313,13 @@ def test_make_plan_uploads_changed_file() -> None:
 
     plan = make_plan(
         [index],
-        [ZoneFile("index.html", checksum_of(b"made-up old index"), "")],
+        [
+            ZoneFile(
+                "index.html",
+                checksum_of(b"made-up old index"),
+                None,
+            ),
+        ],
     )
 
     expect = Plan(
@@ -293,7 +341,13 @@ def test_make_plan_uploads_file_without_checksum() -> None:
 
     plan = make_plan(
         [index],
-        [ZoneFile("index.html", None, "")],
+        [
+            ZoneFile(
+                "index.html",
+                None,
+                None,
+            ),
+        ],
     )
 
     expect = Plan(

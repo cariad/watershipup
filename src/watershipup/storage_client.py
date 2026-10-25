@@ -7,6 +7,7 @@ from typing import Self
 
 import httpx2
 
+from .content_types import content_type_of
 from .exceptions import RequestFailedError
 from .urls import make_zone_url
 from .zone_file import ZoneFile
@@ -214,6 +215,9 @@ class StorageClient:
         headers = {
             "Checksum": checksum,
         }
+
+        if content_type := content_type_of(remote_path):
+            headers["Override-Content-Type"] = content_type
 
         url = make_zone_url(
             self._zone,

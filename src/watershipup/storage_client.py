@@ -54,26 +54,35 @@ class StorageClient:
         self,
         local_path: Path,
         remote_path: str,
+        *,
+        checksum: str,
     ) -> None:
         """Upload a file, replacing any file already at its path.
 
         Args:
             local_path: Path to the local file to upload.
             remote_path: Storage zone path to upload to.
+            checksum: The file's SHA-256, in uppercase hexadecimal.
 
         Raises:
             httpx2.RequestError: When bunny.net can't be reached, or its
                 response can't be read.
             OSError: When the file can't be read.
-            RequestFailedError: When bunny.net doesn't answer with HTTP 201.
+            RequestFailedError: When bunny.net doesn't answer with HTTP 201,
+                such as when the file doesn't match its checksum.
         """
         url = self.make_url(remote_path)
+
+        headers = {
+            **self._headers,
+            "Checksum": checksum,
+        }
 
         with local_path.open("rb") as f:
             response = httpx2.put(
                 url,
                 content=f,
-                headers=self._headers,
+                headers=headers,
                 timeout=self._timeout,
             )
 

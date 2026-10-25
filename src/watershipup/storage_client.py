@@ -79,6 +79,49 @@ class StorageClient:
         """Close the client's connections."""
         self._client.close()
 
+    def delete(
+        self,
+        remote_path: str,
+    ) -> None:
+        """Delete a file from the zone.
+
+        Deletions are idempotent, so deleting a file that doesn't exist is considered a
+        successful deletion.
+
+        The path must be to a file, never a directory. bunny.net answers 404 to a
+        directory's path without its trailing slash, and deletes nothing, so that's
+        considered a successful deletion too.
+
+        Args:
+            remote_path: Storage zone path of the file to delete.
+
+        Raises:
+            httpx2.RequestError: When bunny.net can't be reached, or its response can't
+                be read.
+            RequestFailedError: When bunny.net doesn't answer with HTTP 200 or 404.
+            RuntimeError: When the client has been closed.
+            ValueError: When the path is empty or invalid.
+        """
+        if not remote_path or remote_path.endswith("/"):
+            raise ValueError(f"Won't delete a directory: {remote_path!r}")
+
+        url = make_zone_url(
+            self._zone,
+            remote_path,
+        )
+
+        response = self._client.delete(url)
+
+        if response.status_code in (200, 404):
+            return
+
+        raise RequestFailedError(
+            "DELETE",
+            remote_path,
+            response.status_code,
+            response.reason_phrase,
+        )
+
     def upload(
         self,
         local_path: Path,
@@ -100,6 +143,7 @@ class StorageClient:
             RequestFailedError: When bunny.net doesn't answer with HTTP 201,
                 such as when the file doesn't match its checksum.
             RuntimeError: When the client has been closed.
+            ValueError: When the path has a "." or ".." segment.
         """
         headers = {
             "Checksum": checksum,

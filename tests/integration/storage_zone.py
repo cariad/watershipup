@@ -13,6 +13,29 @@ from pytest import fail
 from watershipup.urls import make_zone_url
 
 
+def _get(
+    path: str,
+) -> httpx2.Response:
+    """Send a `GET` for a path in the test zone.
+
+    Args:
+        path: The path in the zone.
+
+    Returns:
+        The response.
+    """
+    password = environment_variable("WATERSHIPUP_TEST_PASSWORD")
+    zone = environment_variable("WATERSHIPUP_TEST_ZONE")
+    url = make_zone_url(zone, path)
+
+    return httpx2.get(
+        url,
+        headers={
+            "AccessKey": password,
+        },
+    )
+
+
 def environment_variable(name: str) -> str:
     """Read an environment variable, or fail the test if it isn't set.
 
@@ -34,6 +57,25 @@ def environment_variable(name: str) -> str:
     )
 
 
+def is_stored(
+    path: str,
+) -> bool:
+    """Check whether or not a file exists in the test zone.
+
+    Args:
+        path: The file's path in the zone.
+
+    Returns:
+        `True` if the file exists in the zone.
+    """
+    response = _get(path)
+
+    if response.status_code not in (200, 404):
+        fail(f"GET {path!r} answered {response.status_code} {response.reason_phrase}")
+
+    return response.status_code == 200
+
+
 def read_storage(
     path: str,
 ) -> bytes:
@@ -45,16 +87,7 @@ def read_storage(
     Returns:
         The file's bytes.
     """
-    password = environment_variable("WATERSHIPUP_TEST_PASSWORD")
-    zone = environment_variable("WATERSHIPUP_TEST_ZONE")
-    url = make_zone_url(zone, path)
-
-    response = httpx2.get(
-        url,
-        headers={
-            "AccessKey": password,
-        },
-    )
+    response = _get(path)
 
     if response.status_code != 200:
         fail(f"GET {path!r} answered {response.status_code} {response.reason_phrase}")

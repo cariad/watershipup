@@ -5,7 +5,49 @@ from pathlib import Path
 
 from pytest import mark
 
-from watershipup.local_files import is_hidden, make_checksum
+from watershipup.local_files import has_invalid_name, is_hidden, make_checksum
+
+
+@mark.parametrize(
+    "path",
+    [
+        " index.html",
+        "index.html ",
+        " css/site.css",
+        "css /site.css",
+        "css/ site.css",
+        "index.html\u00a0",
+        "\u3000index.html",
+        "tab\there.html",
+        "line\nbreak.html",
+        "delete\x7f.html",
+        "css\t/site.css",
+        "css/tab\t.css",
+        "line\u2028break.html",
+        "paragraph\u2029break.html",
+        "\ufeffindex.html",
+        "zero\u200bwidth.html",
+    ],
+)
+def test_has_invalid_name(path: str) -> None:
+    """`has_invalid_name` must be true for each kind of invalid name."""
+    invalid = has_invalid_name(path)
+    assert invalid
+
+
+@mark.parametrize(
+    "path",
+    [
+        "index.html",
+        "css/site.css",
+        "about us.html",
+        "café/menu.html",
+    ],
+)
+def test_has_invalid_name_when_valid(path: str) -> None:
+    """`has_invalid_name` must be false for a name that bunny.net stores."""
+    invalid = has_invalid_name(path)
+    assert not invalid
 
 
 @mark.parametrize(

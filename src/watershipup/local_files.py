@@ -2,6 +2,30 @@
 
 from hashlib import file_digest
 from pathlib import Path
+from unicodedata import category
+
+INVALID_CATEGORIES = {"Cc", "Cf", "Zl", "Zp"}
+"""Unicode categories of the characters that watershipup won't publish in a name."""
+
+
+def has_invalid_name(relative_posix_path: str) -> bool:
+    """Check whether a file's path holds a name that watershipup won't publish.
+
+    Args:
+        relative_posix_path: The file's path relative to the directory to publish, with
+        forward slashes.
+
+    Returns:
+        `True` if any name in the path would be rejected by bunny.net.
+    """
+    for name in relative_posix_path.split("/"):
+        if name != name.strip():
+            return True
+
+        if any(category(character) in INVALID_CATEGORIES for character in name):
+            return True
+
+    return False
 
 
 def is_hidden(relative_posix_path: str) -> bool:

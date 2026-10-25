@@ -8,7 +8,7 @@ from pathlib import Path
 from pytest import mark, raises
 
 from tests.file_helpers import touch_files
-from watershipup.exceptions import HiddenPathError, NoFilesError
+from watershipup.exceptions import HiddenPathError, InvalidNameError, NoFilesError
 from watershipup.local_directory import walk_local_directory
 from watershipup.local_file import LocalFile
 
@@ -162,6 +162,38 @@ def test_walk_local_directory_raises_when_missing(tmp_path: Path) -> None:
     """`walk_local_directory` must raise when the directory doesn't exist."""
     with raises(FileNotFoundError):
         walk_local_directory(tmp_path / "missing")
+
+
+def test_walk_local_directory_raises_when_name_invalid(tmp_path: Path) -> None:
+    """`walk_local_directory` must raise with the path of an invalid name."""
+    touch_files(
+        tmp_path,
+        "index.html",
+        "css/ site.css",
+    )
+
+    with raises(InvalidNameError) as error:
+        walk_local_directory(tmp_path)
+
+    invalid = error.value.path
+    expect = tmp_path / "css/ site.css"
+
+    assert invalid == expect
+
+
+def test_walk_local_directory_raises_when_name_invalid_without_reading(
+    tmp_path: Path,
+) -> None:
+    """`walk_local_directory` must refuse an invalid name without reading it."""
+    path = tmp_path / " index.html"
+    path.touch()
+    path.chmod(0o000)
+
+    try:
+        with raises(InvalidNameError):
+            walk_local_directory(tmp_path)
+    finally:
+        path.chmod(0o644)
 
 
 @mark.skipif(

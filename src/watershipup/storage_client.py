@@ -9,6 +9,7 @@ import httpx2
 
 from .exceptions import RequestFailedError
 from .urls import make_zone_url
+from .zone_file import ZoneFile
 from .zone_listing import ZoneListing
 from .zone_listings import is_valid_directory, parse_listing
 
@@ -231,3 +232,29 @@ class StorageClient:
             remote_path,
             201,
         )
+
+    def walk_zone(self) -> tuple[ZoneFile, ...]:
+        """Find every file in the zone.
+
+        The zone's root is listed first, then every subdirectory, one listing at a time.
+
+        Returns:
+            Every file in the zone, sorted by path.
+
+        Raises:
+            httpx2.RequestError: When bunny.net can't be reached, or its response can't
+                be read.
+            RequestFailedError: When bunny.net doesn't answer a listing with HTTP 200.
+            RuntimeError: When the client has been closed.
+            ValueError: When a listing is invalid.
+        """
+        files: list[ZoneFile] = []
+        directories = [""]
+
+        while directories:
+            listing = self.list_directory(directories.pop())
+
+            files.extend(listing.files)
+            directories.extend(listing.directories)
+
+        return tuple(sorted(files, key=lambda zone_file: zone_file.path))

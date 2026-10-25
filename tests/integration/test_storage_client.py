@@ -279,3 +279,38 @@ def test_upload_wrong_password(
     assert ex.value.method == "PUT"
     assert ex.value.path == "test_upload_wrong_password.txt"
     assert ex.value.status == 401
+
+
+def test_walk_zone(
+    client: StorageClient,
+    tmp_path: Path,
+) -> None:
+    """`walk_zone` must find files at every depth of the zone."""
+    # Different on every run, so a file left by an earlier run can't pass.
+    contents = {
+        "test_walk_zone.txt": uuid4().bytes,
+        "test_walk_zone/a.txt": uuid4().bytes,
+        "test_walk_zone/sub/b.txt": uuid4().bytes,
+    }
+
+    for remote_path, content in contents.items():
+        local_path = tmp_path / "file.txt"
+        local_path.write_bytes(content)
+
+        client.upload(
+            local_path,
+            remote_path,
+            checksum=checksum_of(content),
+        )
+
+    found = set(client.walk_zone())
+
+    expect = {
+        ZoneFile(remote_path, checksum_of(content), "")
+        for remote_path, content in contents.items()
+    }
+
+    # The zone also holds other tests' files, so only these must be found.
+    missing = expect - found
+
+    assert not missing

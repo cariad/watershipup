@@ -3,9 +3,9 @@
 from ssl import SSLCertVerificationError, SSLEOFError
 
 import httpx2
-from pytest import mark
+from pytest import mark, param, raises
 
-from watershipup.retries import is_retryable_error, is_retryable_status
+from watershipup.retries import is_retryable_error, is_retryable_status, retry_delay
 
 BUSY_BODY = b'{"HttpCode":400,"Message":"Unable to process request"}'
 """A made-up 400 body for a zone that's over its listing or delete limits."""
@@ -114,3 +114,73 @@ def test_is_retryable_status_when_not(status: int, body: bytes) -> None:
     """`is_retryable_status` must be false for a refusal that will happen again."""
     retryable = is_retryable_status(status, body)
     assert not retryable
+
+
+@mark.parametrize(
+    ["retry", "expect"],
+    [
+        (1, 1),
+        (2, 2),
+        (3, 4),
+        (4, 8),
+        (5, 10),
+        (6, 10),
+    ],
+)
+def test_retry_delay(retry: int, expect: int) -> None:
+    """`retry_delay` must double the wait with each retry, up to 10 seconds."""
+    delay = retry_delay(retry, None)
+    assert delay == expect
+
+
+@mark.parametrize(
+    "retry_after",
+    [
+        "Fri, 01 Jan 2100 00:00:00 GMT",
+        "soon",
+        "5.5",
+        "",
+        "+30",
+        "1_0",
+        "\uff13\uff10",  # "30" in fullwidth digits.
+        "\u0663\u0660",  # "30" in Arabic-Indic digits.
+    ],
+)
+def test_retry_delay_ignores_other_retry_after(retry_after: str) -> None:
+    """`retry_delay` must ignore a `Retry-After` that isn't a number of seconds.
+
+    Each one that could be read as a wait asks for longer than the second retry's
+    backoff of 2 seconds, so honouring it would change the delay.
+    """
+    delay = retry_delay(2, retry_after)
+    expect = 2
+
+    assert delay == expect
+
+
+@mark.parametrize("retry", [0, -1])
+def test_retry_delay_refuses_index(retry: int) -> None:
+    """`retry_delay` must refuse a retry index below 1."""
+    with raises(ValueError, match="at least 1"):
+        retry_delay(retry, None)
+
+
+@mark.parametrize(
+    ["retry", "retry_after", "expect"],
+    [
+        (1, "3", 3),
+        (1, "30", 30),
+        (1, "120", 60),
+        (1, "0", 1),
+        (3, "2", 4),
+        param(1, "9" * 5000, 60, id="1-5000-digits-60"),
+    ],
+)
+def test_retry_delay_with_retry_after(
+    retry: int,
+    retry_after: str,
+    expect: int,
+) -> None:
+    """`retry_delay` must honour `Retry-After`, up to 60 seconds, but not wait less."""
+    delay = retry_delay(retry, retry_after)
+    assert delay == expect

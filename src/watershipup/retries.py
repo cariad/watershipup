@@ -1,11 +1,19 @@
-"""Functions for deciding which failed requests to send again."""
+"""Functions for deciding which failed requests to send again, and sending them."""
 
+import logging
+import time
+from collections.abc import Callable
 from ssl import SSLCertVerificationError
 
 import httpx2
 
+_logger = logging.getLogger(__name__)
+
 BUSY_MESSAGE = b"Unable to process request"
 """What bunny.net's 400 says when a zone is over its listing or delete limits."""
+
+MAX_ATTEMPTS = 5
+"""The most times that a request is sent, counting the first."""
 
 MAX_BACKOFF_SECONDS = 10
 """The longest that watershipup's own wait between retries grows to, as it doubles."""
@@ -133,3 +141,64 @@ def retry_delay(
         max(backoff, requested),
         MAX_REQUESTED_WAIT_SECONDS,
     )
+
+
+def send_with_retries(
+    send: Callable[[], httpx2.Response],
+    sleep: Callable[[float], object] = time.sleep,
+) -> httpx2.Response:
+    """Send a request, and send it again while it fails in a way that might not last.
+
+    The request is sent up to `MAX_ATTEMPTS` times, waiting as long as `retry_delay`
+    says before each retry, and logging a warning that says why.
+
+    Args:
+        send: Sends the request once, and returns bunny.net's response.
+        sleep: Waits for a number of seconds.
+
+    Returns:
+        The first response that isn't worth sending again, such as a success, or else
+        the last one, for the caller to check.
+
+    Raises:
+        Exception: Any other error that `send` raises, at once, without a retry.
+        httpx2.TransportError: When a connection error can't be retried, or the last
+            attempt fails with one.
+    """
+    for retry_index in range(1, MAX_ATTEMPTS):
+        try:
+            response = send()
+        except httpx2.TransportError as ex:
+            if not is_retryable_error(ex):
+                raise
+
+            delay = retry_delay(retry_index, None)
+
+            _logger.warning(
+                "Sending again in %d s, after an error: %s",
+                delay,
+                ex,
+            )
+
+            sleep(delay)
+            continue
+
+        if not is_retryable_status(response.status_code, response.content):
+            return response
+
+        delay = retry_delay(
+            retry_index,
+            response.headers.get("Retry-After"),
+        )
+
+        _logger.warning(
+            "Sending again in %d s, after %d %s",
+            delay,
+            response.status_code,
+            response.reason_phrase,
+        )
+
+        sleep(delay)
+
+    # The last attempt's response or error goes to the caller.
+    return send()

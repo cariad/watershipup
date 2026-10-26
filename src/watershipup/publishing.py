@@ -26,6 +26,9 @@ def publish(
     the directory is deleted, every feed before every page. Every other file that's no
     longer in the directory is kept.
 
+    A request that fails in a way that might not last, like a dropped connection or a
+    503, is sent again, up to 5 attempts in all, with a warning logged before each wait.
+
     Args:
         directory: Path to the directory to publish.
         password: The storage zone's password.
@@ -41,7 +44,7 @@ def publish(
         NoFilesError: When the directory has no files to publish.
         OSError: When the directory, one of its subdirectories, or one of its files
             can't be read.
-        RequestFailedError: When bunny.net refuses a request.
+        RequestFailedError: When bunny.net refuses a request, after any retries.
         UnicodeEncodeError: When a file's path within the directory isn't valid UTF-8,
             or the password isn't ASCII.
         ValueError: When one of the zone's listings is invalid.

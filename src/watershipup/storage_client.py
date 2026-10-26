@@ -1,5 +1,6 @@
 """The `StorageClient` class, which interacts with a storage zone's HTTP API."""
 
+from collections.abc import Callable
 from http.cookiejar import CookieJar, DefaultCookiePolicy
 from pathlib import Path
 from types import TracebackType
@@ -9,6 +10,7 @@ import httpx2
 
 from .content_types import content_type_of
 from .exceptions import RequestFailedError
+from .retries import send_with_retries
 from .urls import make_zone_url
 from .zone_file import ZoneFile
 from .zone_listing import ZoneListing
@@ -20,6 +22,9 @@ class StorageClient:
 
     Connections are kept open between requests, so close it when you're done, or use it
     as a context manager.
+
+    A request that fails in a way that might not last, like a dropped connection or a
+    503, is sent again, as `send_with_retries` describes.
     """
 
     def __enter__(self) -> Self:
@@ -80,21 +85,29 @@ class StorageClient:
         self._zone = zone
 
     @staticmethod
-    def _check_status(
-        response: httpx2.Response,
+    def _request(
+        send: Callable[[], httpx2.Response],
         remote_path: str,
         *statuses: int,
-    ) -> None:
-        """Check that bunny.net answered a request with an expected status.
+    ) -> httpx2.Response:
+        """Send a request, with retries, and check that bunny.net answered as expected.
 
         Args:
-            response: bunny.net's response.
-            remote_path: Storage zone path that the request was for.
+            send: Sends the request once, and returns bunny.net's response.
+            remote_path: Storage zone path that the request is for.
             *statuses: The statuses that mean the request succeeded.
 
+        Returns:
+            bunny.net's response.
+
         Raises:
-            RequestFailedError: When the response's status isn't one of them.
+            Exception: Any error from `send_with_retries`, such as a connection error
+                after the last attempt.
+            RequestFailedError: When the response's status isn't one of them, after any
+                retries.
         """
+        response = send_with_retries(send)
+
         if response.status_code not in statuses:
             raise RequestFailedError(
                 response.request.method,
@@ -102,6 +115,8 @@ class StorageClient:
                 response.status_code,
                 response.reason_phrase,
             )
+
+        return response
 
     def close(self) -> None:
         """Close the client's connections."""
@@ -125,8 +140,9 @@ class StorageClient:
 
         Raises:
             httpx2.RequestError: When bunny.net can't be reached, or its response can't
-                be read.
-            RequestFailedError: When bunny.net doesn't answer with HTTP 200 or 404.
+                be read, after any retries.
+            RequestFailedError: When bunny.net doesn't answer with HTTP 200 or 404,
+                after any retries.
             RuntimeError: When the client has been closed.
             ValueError: When the path is empty or invalid.
         """
@@ -138,10 +154,8 @@ class StorageClient:
             remote_path,
         )
 
-        response = self._client.delete(url)
-
-        self._check_status(
-            response,
+        self._request(
+            lambda: self._client.delete(url),
             remote_path,
             200,
             404,
@@ -163,8 +177,9 @@ class StorageClient:
 
         Raises:
             httpx2.RequestError: When bunny.net can't be reached, or its response can't
-                be read.
-            RequestFailedError: When bunny.net doesn't answer with HTTP 200.
+                be read, after any retries.
+            RequestFailedError: When bunny.net doesn't answer with HTTP 200, after any
+                retries.
             RuntimeError: When the client has been closed.
             ValueError: When the directory or its listing is invalid.
         """
@@ -176,10 +191,8 @@ class StorageClient:
             directory,
         )
 
-        response = self._client.get(url)
-
-        self._check_status(
-            response,
+        response = self._request(
+            lambda: self._client.get(url),
             directory,
             200,
         )
@@ -205,10 +218,10 @@ class StorageClient:
 
         Raises:
             httpx2.RequestError: When bunny.net can't be reached, or its
-                response can't be read.
+                response can't be read, after any retries.
             OSError: When the file can't be read.
             RequestFailedError: When bunny.net doesn't answer with HTTP 201,
-                such as when the file doesn't match its checksum.
+                such as when the file doesn't match its checksum, after any retries.
             RuntimeError: When the client has been closed.
             ValueError: When the path has a "." or ".." segment.
         """
@@ -224,15 +237,17 @@ class StorageClient:
             remote_path,
         )
 
-        with local_path.open("rb") as f:
-            response = self._client.put(
-                url,
-                content=f,
-                headers=headers,
-            )
+        def send() -> httpx2.Response:
+            # Each attempt opens the file again, to send the whole of it.
+            with local_path.open("rb") as f:
+                return self._client.put(
+                    url,
+                    content=f,
+                    headers=headers,
+                )
 
-        self._check_status(
-            response,
+        self._request(
+            send,
             remote_path,
             201,
         )
@@ -247,8 +262,9 @@ class StorageClient:
 
         Raises:
             httpx2.RequestError: When bunny.net can't be reached, or its response can't
-                be read.
-            RequestFailedError: When bunny.net doesn't answer a listing with HTTP 200.
+                be read, after any retries.
+            RequestFailedError: When bunny.net doesn't answer a listing with HTTP 200,
+                after any retries.
             RuntimeError: When the client has been closed.
             ValueError: When a listing is invalid.
         """

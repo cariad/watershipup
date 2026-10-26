@@ -1,11 +1,18 @@
-"""Tests for deciding which failed requests to send again."""
+"""Tests for deciding which failed requests to send again, and sending them."""
 
+import logging
+from collections.abc import Callable
 from ssl import SSLCertVerificationError, SSLEOFError
 
 import httpx2
-from pytest import mark, param, raises
+from pytest import LogCaptureFixture, mark, param, raises
 
-from watershipup.retries import is_retryable_error, is_retryable_status, retry_delay
+from watershipup.retries import (
+    is_retryable_error,
+    is_retryable_status,
+    retry_delay,
+    send_with_retries,
+)
 
 BUSY_BODY = b'{"HttpCode":400,"Message":"Unable to process request"}'
 """A made-up 400 body for a zone that's over its listing or delete limits."""
@@ -39,6 +46,30 @@ def _make_connect_error(cause: Exception) -> httpx2.ConnectError:
     error.__cause__ = middle
 
     return error
+
+
+def _make_send(
+    *outcomes: httpx2.Response | Exception,
+) -> Callable[[], httpx2.Response]:
+    """Make a stand-in for sending a request, which gives made-up outcomes in turn.
+
+    Args:
+        *outcomes: Each attempt's response, or the error it raises.
+
+    Returns:
+        A function that returns or raises the next outcome each time it's called.
+    """
+    remaining = list(outcomes)
+
+    def send() -> httpx2.Response:
+        outcome = remaining.pop(0)
+
+        if isinstance(outcome, Exception):
+            raise outcome
+
+        return outcome
+
+    return send
 
 
 @mark.parametrize(
@@ -184,3 +215,143 @@ def test_retry_delay_with_retry_after(
     """`retry_delay` must honour `Retry-After`, up to 60 seconds, but not wait less."""
     delay = retry_delay(retry, retry_after)
     assert delay == expect
+
+
+def test_send_with_retries_counts_every_retry() -> None:
+    """`send_with_retries` must count connection errors and refusals alike."""
+    send = _make_send(
+        httpx2.ConnectError("made-up"),
+        httpx2.Response(503),
+        httpx2.Response(201),
+    )
+
+    waits: list[float] = []
+
+    response = send_with_retries(send, waits.append)
+    status_and_waits = (response.status_code, waits)
+    expect = (201, [1, 2])
+
+    assert status_and_waits == expect
+
+
+def test_send_with_retries_gives_up_on_error() -> None:
+    """`send_with_retries` must raise the fifth connection error in a row."""
+    send = _make_send(*[httpx2.ConnectError(f"made-up {n}") for n in range(1, 6)])
+    waits: list[float] = []
+
+    with raises(httpx2.ConnectError, match="made-up 5"):
+        send_with_retries(send, waits.append)
+
+    expect = [1, 2, 4, 8]
+
+    assert waits == expect
+
+
+def test_send_with_retries_gives_up_on_status() -> None:
+    """`send_with_retries` must return the fifth retryable refusal in a row."""
+    send = _make_send(
+        *[httpx2.Response(503, content=f"{n}".encode()) for n in range(1, 6)]
+    )
+    waits: list[float] = []
+
+    response = send_with_retries(send, waits.append)
+    content_and_waits = (response.content, waits)
+    expect = (b"5", [1, 2, 4, 8])
+
+    assert content_and_waits == expect
+
+
+def test_send_with_retries_honours_retry_after() -> None:
+    """`send_with_retries` must wait as long as a refusal's `Retry-After` asks."""
+    send = _make_send(
+        httpx2.Response(429, headers={"Retry-After": "5"}),
+        httpx2.Response(201),
+    )
+
+    waits: list[float] = []
+
+    response = send_with_retries(send, waits.append)
+    status_and_waits = (response.status_code, waits)
+    expect = (201, [5])
+
+    assert status_and_waits == expect
+
+
+def test_send_with_retries_raises_permanent_error() -> None:
+    """`send_with_retries` must raise a connection error that a retry can't fix."""
+    send = _make_send(httpx2.LocalProtocolError("made-up"))
+    waits: list[float] = []
+
+    with raises(httpx2.LocalProtocolError):
+        send_with_retries(send, waits.append)
+
+    expect: list[float] = []
+
+    assert waits == expect
+
+
+def test_send_with_retries_retries_error() -> None:
+    """`send_with_retries` must send a request again after a connection error."""
+    send = _make_send(
+        httpx2.ConnectError("made-up"),
+        httpx2.Response(201),
+    )
+
+    waits: list[float] = []
+
+    response = send_with_retries(send, waits.append)
+    status_and_waits = (response.status_code, waits)
+    expect = (201, [1])
+
+    assert status_and_waits == expect
+
+
+def test_send_with_retries_retries_status() -> None:
+    """`send_with_retries` must send a request again after a retryable refusal."""
+    send = _make_send(
+        httpx2.Response(503),
+        httpx2.Response(201),
+    )
+
+    waits: list[float] = []
+
+    response = send_with_retries(send, waits.append)
+    status_and_waits = (response.status_code, waits)
+    expect = (201, [1])
+
+    assert status_and_waits == expect
+
+
+def test_send_with_retries_returns_permanent_refusal() -> None:
+    """`send_with_retries` must return a refusal that a retry can't fix, at once."""
+    send = _make_send(httpx2.Response(401))
+    waits: list[float] = []
+
+    response = send_with_retries(send, waits.append)
+    status_and_waits = (response.status_code, waits)
+    expect: tuple[int, list[float]] = (401, [])
+
+    assert status_and_waits == expect
+
+
+def test_send_with_retries_warns(caplog: LogCaptureFixture) -> None:
+    """`send_with_retries` must warn why it's about to wait, and for how long."""
+    send = _make_send(
+        httpx2.ConnectError("made-up"),
+        httpx2.Response(503),
+        httpx2.Response(201),
+    )
+
+    caplog.set_level(logging.WARNING, logger="watershipup.retries")
+    warnings_before_waits: list[str] = []
+
+    def wait(seconds: float) -> None:
+        warnings_before_waits.append(caplog.messages[-1])
+
+    send_with_retries(send, wait)
+    expect = [
+        "Sending again in 1 s, after an error: made-up",
+        "Sending again in 2 s, after 503 Service Unavailable",
+    ]
+
+    assert warnings_before_waits == expect

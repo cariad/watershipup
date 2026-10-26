@@ -7,6 +7,12 @@ import httpx2
 BUSY_MESSAGE = b"Unable to process request"
 """What bunny.net's 400 says when a zone is over its listing or delete limits."""
 
+MAX_BACKOFF_SECONDS = 10
+"""The longest that watershipup's own wait between retries grows to, as it doubles."""
+
+MAX_REQUESTED_WAIT_SECONDS = 60
+"""The longest wait that watershipup honours from a response's `Retry-After`."""
+
 PERMANENT_ERRORS = (
     httpx2.LocalProtocolError,
     httpx2.ProxyError,
@@ -77,3 +83,53 @@ def is_retryable_status(status: int, body: bytes) -> bool:
         return status not in PERMANENT_STATUSES
 
     return status == 400 and BUSY_MESSAGE in body
+
+
+def retry_delay(
+    retry_index: int,
+    retry_after: str | None,
+) -> int:
+    """Calculate how long to wait before retrying a request.
+
+    watershipup's own backoff doubles with each retry, from 1 second up to
+    `MAX_BACKOFF_SECONDS`.
+
+    bunny.net can ask for a longer wait with a `Retry-After` header in seconds, which
+    is honoured up to `MAX_REQUESTED_WAIT_SECONDS`. A shorter one, or one in any other
+    form, like a date, leaves the backoff as it is.
+
+    Args:
+        retry_index: 1 for the first retry, 2 for the second, and so on.
+        retry_after: The response's `Retry-After` header, if it had one.
+
+    Returns:
+        The number of seconds to wait.
+
+    Raises:
+        ValueError: When `retry_index` is less than 1.
+    """
+    if retry_index < 1:
+        raise ValueError(f"Retry index must be at least 1: {retry_index!r}")
+
+    # Capping the exponent as well keeps a huge index from making a huge number.
+    backoff: int = min(
+        2 ** min(retry_index - 1, MAX_BACKOFF_SECONDS),
+        MAX_BACKOFF_SECONDS,
+    )
+
+    if retry_after is None:
+        return backoff
+
+    if not (retry_after.isascii() and retry_after.isdigit()):
+        return backoff
+
+    try:
+        requested = int(retry_after)
+    except ValueError:
+        # By default, `int()` refuses more than 4,300 digits, far beyond the cap.
+        requested = MAX_REQUESTED_WAIT_SECONDS
+
+    return min(
+        max(backoff, requested),
+        MAX_REQUESTED_WAIT_SECONDS,
+    )

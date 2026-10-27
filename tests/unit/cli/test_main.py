@@ -1,11 +1,14 @@
 """Tests for the command's entry point."""
 
 import os
+import signal
 import subprocess
 import sys
 import sysconfig
+import threading
 from importlib.metadata import entry_points, version
 from pathlib import Path
+from types import FrameType
 
 import pytest
 
@@ -102,6 +105,83 @@ def test_hidden_file(
     assert (code, err) == (1, expect)
 
 
+# Run in a child process, so a signal that lands at the wrong moment can only end the
+# child.
+INTERRUPT_CHILD = """
+import signal
+import sys
+
+from watershipup.cli import main
+
+directory = sys.argv[1]
+signum = int(sys.argv[2])
+
+# A child of a shell that ignores Ctrl+C inherits that, so turn Ctrl+C back on.
+signal.signal(signal.SIGINT, signal.default_int_handler)
+
+def send_signal(event, args):
+    # The walk opens the file inside the publish, after `main` has set its SIGTERM
+    # handler and before it puts back the old one.
+    if event == "open" and str(args[0]).startswith(directory):
+        signal.raise_signal(signum)
+
+# Python stops coverage from recording code that runs inside an audit hook, which is
+# where the signal's handler runs, unless the hook allows it.
+send_signal.__cantrace__ = True
+
+sys.addaudithook(send_signal)
+
+# If the signal were ever missed, a zone's name with a line break would fail before
+# any request was sent.
+sys.exit(main(["--zone", "example\\nzone", directory]))
+"""
+
+
+@pytest.mark.parametrize(
+    ("signum", "expect_code", "expect_message"),
+    [
+        (signal.SIGINT, 130, "interrupted"),
+        (signal.SIGTERM, 143, "terminated"),
+    ],
+)
+def test_interrupt(
+    expect_code: int,
+    expect_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    signum: signal.Signals,
+    tmp_path: Path,
+) -> None:
+    """Ctrl+C or SIGTERM during a publish must exit with an error."""
+    monkeypatch.setenv("WATERSHIPUP_PASSWORD", "made-up")
+
+    touch_files(tmp_path, "index.html")
+
+    child = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            INTERRUPT_CHILD,
+            str(tmp_path),
+            str(
+                int(signum),
+            ),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=60,
+    )
+
+    result = (child.returncode, child.stderr)
+
+    expect = (
+        expect_code,
+        f"watershipup: error: {expect_message}\n",
+    )
+
+    assert result == expect
+
+
 @pytest.mark.parametrize(
     "password",
     [
@@ -191,6 +271,76 @@ def test_no_colour(
     assert "\x1b" not in output.out
     assert "\x1b" not in output.err
     assert "watershipup: error: " in output.err
+
+
+def test_other_thread(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """`main` must run outside the main thread, which alone can set signal handlers."""
+    monkeypatch.setenv("WATERSHIPUP_PASSWORD", "made-up")
+
+    codes: list[int] = []
+
+    # The directory is empty, so the publish fails before any request.
+    thread = threading.Thread(
+        target=lambda: codes.append(
+            main(
+                [
+                    "--zone",
+                    "example-zone",
+                    str(tmp_path),
+                ],
+            ),
+        ),
+    )
+
+    thread.start()
+    thread.join()
+
+    result = codes
+    expect = [1]
+
+    assert result == expect
+
+
+def test_restores_sigterm_handler(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """`main` must put back the SIGTERM handler that it found."""
+    monkeypatch.setenv(
+        "WATERSHIPUP_PASSWORD",
+        "made-up",
+    )
+
+    def handler(signum: int, frame: FrameType | None) -> None:
+        pass
+
+    previous = signal.signal(
+        signal.SIGTERM,
+        handler,
+    )
+
+    try:
+        # The directory is empty, so the publish fails before any request.
+        main(
+            [
+                "--zone",
+                "example-zone",
+                str(tmp_path),
+            ],
+        )
+
+        restored = signal.getsignal(signal.SIGTERM)
+
+    finally:
+        signal.signal(
+            signal.SIGTERM,
+            previous,
+        )
+
+    assert restored is handler
 
 
 def test_unknown_argument(capsys: pytest.CaptureFixture[str]) -> None:

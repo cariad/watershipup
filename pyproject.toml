@@ -46,6 +46,7 @@ skip_covered = true
 
 [tool.coverage.run]
 branch = true
+patch = ["subprocess"]
 source = ["watershipup"]
 
 [tool.hatch.version]

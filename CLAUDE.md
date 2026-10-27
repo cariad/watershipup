@@ -20,7 +20,8 @@ mise exec -- uv run --locked ruff format       # Format Python
 
 ## Keep in sync
 
-- `.config/mise.toml`•`min_version` ↔ the mise-action `version` in every job that installs mise, in `.github/workflows/ci.yml`.
+- `.config/mise.toml`•`min_version` ↔ the mise-action `version` in every job that installs mise, in `.github/workflows/ci.yml` and `.github/workflows/release.yml`.
+- `.github/workflows/release.yml`'s file name and its `pypi` environment ↔ the trusted publisher on PyPI. Renaming either breaks publishing until the publisher is updated.
 - After changing `.config/mise.toml`•`tools`, run `mise lock`, because CI sets `MISE_LOCKED=1`.
 - Every `lint:*` task in `.config/mise.toml` ↔ a step of its own in `.github/workflows/ci.yml`'s `lint` job.
 - `.config/mise.toml`•`tools`•`uv` ↔ `pyproject.toml`•`tool.uv`•`required-version`, which it must satisfy. The range's floor must never be above the uv that Dependabot's uv updater bundles (0.12.19 on 2026-10-18), or every one of Dependabot's uv updates fails. Until both move to 0.13, the test matrix's 3.15 jobs run 3.15.0rc3, because uv 0.12 knows 3.15 only up to its last release candidate.

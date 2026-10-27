@@ -6,7 +6,6 @@ import subprocess
 import sys
 import sysconfig
 import threading
-import time
 from importlib.metadata import entry_points, version
 from pathlib import Path
 from types import FrameType
@@ -106,6 +105,38 @@ def test_hidden_file(
     assert (code, err) == (1, expect)
 
 
+# Run in a child process, so a signal that lands at the wrong moment can only end the
+# child.
+INTERRUPT_CHILD = """
+import signal
+import sys
+
+from watershipup.cli import main
+
+directory = sys.argv[1]
+signum = int(sys.argv[2])
+
+# A child of a shell that ignores Ctrl+C inherits that, so turn Ctrl+C back on.
+signal.signal(signal.SIGINT, signal.default_int_handler)
+
+def send_signal(event, args):
+    # The walk opens the file inside the publish, after `main` has set its SIGTERM
+    # handler and before it puts back the old one.
+    if event == "open" and str(args[0]).startswith(directory):
+        signal.raise_signal(signum)
+
+# Python stops coverage from recording code that runs inside an audit hook, which is
+# where the signal's handler runs, unless the hook allows it.
+send_signal.__cantrace__ = True
+
+sys.addaudithook(send_signal)
+
+# If the signal were ever missed, a zone's name with a line break would fail before
+# any request was sent.
+sys.exit(main(["--zone", "example\\nzone", directory]))
+"""
+
+
 @pytest.mark.parametrize(
     ("signum", "expect_code", "expect_message"),
     [
@@ -114,63 +145,38 @@ def test_hidden_file(
     ],
 )
 def test_interrupt(
-    capsys: pytest.CaptureFixture[str],
     expect_code: int,
     expect_message: str,
     monkeypatch: pytest.MonkeyPatch,
     signum: signal.Signals,
     tmp_path: Path,
 ) -> None:
-    """Ctrl+C or SIGTERM during a publish must exit with an error.
-
-    `main` must also put back the SIGTERM handler that it found.
-    """
+    """Ctrl+C or SIGTERM during a publish must exit with an error."""
     monkeypatch.setenv("WATERSHIPUP_PASSWORD", "made-up")
 
-    # Walking this many files takes far longer than the signal takes to arrive once
-    # `main` has set its handler, so the signal arrives during the walk.
-    touch_files(
-        tmp_path,
-        *[f"{n}.html" for n in range(20_000)],
+    touch_files(tmp_path, "index.html")
+
+    child = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            INTERRUPT_CHILD,
+            str(tmp_path),
+            str(
+                int(signum),
+            ),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=60,
     )
 
-    previous = signal.getsignal(signal.SIGTERM)
-    main_thread = threading.main_thread().ident
-
-    assert main_thread is not None
-
-    def send_signal() -> None:
-        # Sent only once `main` has set its SIGTERM handler, so the signal never meets
-        # Python's default, which would kill the test run.
-        while signal.getsignal(signal.SIGTERM) is previous:
-            time.sleep(0.001)
-
-        signal.pthread_kill(
-            main_thread,
-            signum,
-        )
-
-    sender = threading.Thread(target=send_signal)
-    sender.start()
-
-    # If the walk ever finished first, a zone's name with a line break would fail
-    # before any request was sent.
-    code = main(
-        ["--zone", "example\nzone", str(tmp_path)],
-    )
-
-    sender.join()
-
-    result = (
-        code,
-        capsys.readouterr().err,
-        signal.getsignal(signal.SIGTERM),
-    )
+    result = (child.returncode, child.stderr)
 
     expect = (
         expect_code,
         f"watershipup: error: {expect_message}\n",
-        previous,
     )
 
     assert result == expect

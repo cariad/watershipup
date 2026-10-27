@@ -51,6 +51,7 @@ source = ["watershipup"]
 
 [tool.hatch.version]
 fallback-version = "0.0.0"
+raw-options = { dist_name = "watershipup" }
 source = "vcs"
 
 [tool.pyright]

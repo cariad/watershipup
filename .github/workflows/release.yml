@@ -46,8 +46,10 @@ jobs:
           ls dist
           test -f "dist/watershipup-${GITHUB_REF_NAME#v}.tar.gz"
 
+      # This doesn't use uv.lock either, so hold the wheel's dependencies to releases at
+      # least 7 days old too.
       - name: Run the built wheel's command
-        run: uv run --isolated --no-project --with dist/*.whl watershipup --version
+        run: uv run --exclude-newer "7 days" --isolated --no-project --with dist/*.whl watershipup --version
 
       - name: Upload the package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -8,7 +8,6 @@ from argparse import SUPPRESS, ArgumentParser
 from collections.abc import Sequence
 from pathlib import Path
 from types import FrameType
-from typing import Any
 
 import httpx2
 
@@ -53,21 +52,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         SystemExit: When the arguments are wrong (with 2), or help or the
             version is asked for (with 0).
     """
-    options: dict[str, Any] = {}
-
-    # Don't print in colour.
-    #
-    # `argparse` doesn't accept this option before 3.14.
-    if sys.version_info >= (3, 14):
-        options = {
-            **options,
-            "color": False,
-        }
-
     parser = ArgumentParser(
+        color=False,
         description="Upload a static website to a Bunny Storage zone.",
         prog="watershipup",
-        **options,
     )
 
     parser.add_argument(

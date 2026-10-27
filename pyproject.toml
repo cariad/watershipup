@@ -30,7 +30,7 @@ dynamic = ["version"]
 license = "MIT"
 name = "watershipup"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 
 [project.scripts]
 watershipup = "watershipup.cli:main"
@@ -40,7 +40,7 @@ Issues = "https://github.com/cariad/watershipup/issues"
 Source = "https://github.com/cariad/watershipup"
 
 [tool.coverage.report]
-fail_under = 90
+fail_under = 98
 show_missing = true
 skip_covered = true
 
@@ -55,7 +55,7 @@ source = "vcs"
 
 [tool.pyright]
 include = ["src", "tests"]
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 typeCheckingMode = "strict"
 
 [tool.pytest.ini_options]

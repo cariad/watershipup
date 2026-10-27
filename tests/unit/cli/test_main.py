@@ -1,11 +1,15 @@
 """Tests for the command's entry point."""
 
 import os
+import signal
 import subprocess
 import sys
 import sysconfig
+import threading
+import time
 from importlib.metadata import entry_points, version
 from pathlib import Path
+from types import FrameType
 
 import pytest
 
@@ -103,6 +107,76 @@ def test_hidden_file(
 
 
 @pytest.mark.parametrize(
+    ("signum", "expect_code", "expect_message"),
+    [
+        (signal.SIGINT, 130, "interrupted"),
+        (signal.SIGTERM, 143, "terminated"),
+    ],
+)
+def test_interrupt(
+    capsys: pytest.CaptureFixture[str],
+    expect_code: int,
+    expect_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    signum: signal.Signals,
+    tmp_path: Path,
+) -> None:
+    """Ctrl+C or SIGTERM during a publish must exit with an error.
+
+    `main` must also put back the SIGTERM handler that it found.
+    """
+    monkeypatch.setenv("WATERSHIPUP_PASSWORD", "made-up")
+
+    # Walking this many files takes far longer than the signal takes to arrive once
+    # `main` has set its handler, so the signal arrives during the walk.
+    touch_files(
+        tmp_path,
+        *[f"{n}.html" for n in range(20_000)],
+    )
+
+    previous = signal.getsignal(signal.SIGTERM)
+    main_thread = threading.main_thread().ident
+
+    assert main_thread is not None
+
+    def send_signal() -> None:
+        # Sent only once `main` has set its SIGTERM handler, so the signal never meets
+        # Python's default, which would kill the test run.
+        while signal.getsignal(signal.SIGTERM) is previous:
+            time.sleep(0.001)
+
+        signal.pthread_kill(
+            main_thread,
+            signum,
+        )
+
+    sender = threading.Thread(target=send_signal)
+    sender.start()
+
+    # If the walk ever finished first, a zone's name with a line break would fail
+    # before any request was sent.
+    code = main(
+        ["--zone", "example\nzone", str(tmp_path)],
+    )
+
+    sender.join()
+
+    result = (
+        code,
+        capsys.readouterr().err,
+        signal.getsignal(signal.SIGTERM),
+    )
+
+    expect = (
+        expect_code,
+        f"watershipup: error: {expect_message}\n",
+        previous,
+    )
+
+    assert result == expect
+
+
+@pytest.mark.parametrize(
     "password",
     [
         None,
@@ -191,6 +265,76 @@ def test_no_colour(
     assert "\x1b" not in output.out
     assert "\x1b" not in output.err
     assert "watershipup: error: " in output.err
+
+
+def test_other_thread(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """`main` must run outside the main thread, which alone can set signal handlers."""
+    monkeypatch.setenv("WATERSHIPUP_PASSWORD", "made-up")
+
+    codes: list[int] = []
+
+    # The directory is empty, so the publish fails before any request.
+    thread = threading.Thread(
+        target=lambda: codes.append(
+            main(
+                [
+                    "--zone",
+                    "example-zone",
+                    str(tmp_path),
+                ],
+            ),
+        ),
+    )
+
+    thread.start()
+    thread.join()
+
+    result = codes
+    expect = [1]
+
+    assert result == expect
+
+
+def test_restores_sigterm_handler(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """`main` must put back the SIGTERM handler that it found."""
+    monkeypatch.setenv(
+        "WATERSHIPUP_PASSWORD",
+        "made-up",
+    )
+
+    def handler(signum: int, frame: FrameType | None) -> None:
+        pass
+
+    previous = signal.signal(
+        signal.SIGTERM,
+        handler,
+    )
+
+    try:
+        # The directory is empty, so the publish fails before any request.
+        main(
+            [
+                "--zone",
+                "example-zone",
+                str(tmp_path),
+            ],
+        )
+
+        restored = signal.getsignal(signal.SIGTERM)
+
+    finally:
+        signal.signal(
+            signal.SIGTERM,
+            previous,
+        )
+
+    assert restored is handler
 
 
 def test_unknown_argument(capsys: pytest.CaptureFixture[str]) -> None:

@@ -40,8 +40,7 @@ def publish(
 
     Args:
         directory: Path to the directory to publish.
-        concurrency: The most uploads or deletes at once, as an `int` from 1 to
-            `MAX_CONCURRENCY`.
+        concurrency: The most uploads or deletes at once, from 1 to `MAX_CONCURRENCY`.
         password: The storage zone's password.
         zone: The storage zone's name.
 

@@ -116,3 +116,34 @@ def test_run_all_stops_on_interrupt() -> None:
 
     # The first task was running, so it finished. No other task started.
     assert ran == [0]
+
+
+def test_run_all_waits_on_interrupt() -> None:
+    """`run_all` must let the last tasks finish before it raises an interrupt."""
+    ran: list[int] = []
+
+    def interrupt(signum: int, frame: FrameType | None) -> None:
+        raise KeyboardInterrupt
+
+    def task(n: int) -> None:
+        sleep(0.2)
+        ran.append(n)
+
+    # There are no more tasks than can run at once, so every task has started by the
+    # time the interrupt is raised.
+    tasks = [partial(task, n) for n in range(2)]
+
+    previous = signal(SIGALRM, interrupt)
+    setitimer(ITIMER_REAL, 0.05)
+
+    try:
+        with raises(KeyboardInterrupt):
+            run_all(tasks, 2)
+    finally:
+        setitimer(ITIMER_REAL, 0)
+        signal(SIGALRM, previous)
+
+    found = sorted(ran)
+    expect = [0, 1]
+
+    assert found == expect

@@ -44,6 +44,11 @@ def run_all(
             futures.append(future)
             running.add(future)
 
+        # The block waits for the running tasks as it closes, but an interrupt during
+        # that wait ends it early. An interrupt during this wait is raised inside the
+        # block, so the block still waits as it closes.
+        wait(running)
+
     for future in futures:
         if error := future.exception():
             raise error

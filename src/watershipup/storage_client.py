@@ -1,6 +1,7 @@
 """The `StorageClient` class, which interacts with a storage zone's HTTP API."""
 
 from collections.abc import Callable
+from functools import partial
 from http.cookiejar import CookieJar, DefaultCookiePolicy
 from pathlib import Path
 from types import TracebackType
@@ -8,6 +9,7 @@ from typing import Self
 
 import httpx2
 
+from .concurrency import run_all
 from .content_types import content_type_of
 from .exceptions import RequestFailedError
 from .retries import send_with_retries
@@ -15,6 +17,9 @@ from .urls import make_zone_url
 from .zone_file import ZoneFile
 from .zone_listing import ZoneListing
 from .zone_listings import is_valid_directory, parse_listing
+
+MAX_LISTINGS = 5
+"""The most directories to list at once, which is bunny.net's limit for listings."""
 
 
 class StorageClient:
@@ -255,7 +260,8 @@ class StorageClient:
     def walk_zone(self) -> tuple[ZoneFile, ...]:
         """Find every file in the zone.
 
-        The zone's root is listed first, then every subdirectory, one listing at a time.
+        The zone's root is listed first, then its subdirectories, one level at a time,
+        with up to `MAX_LISTINGS` listings at once.
 
         Returns:
             Every file in the zone, sorted by path.
@@ -268,13 +274,28 @@ class StorageClient:
             RuntimeError: When the client has been closed.
             ValueError: When a listing is invalid.
         """
+
+        def list_into(
+            listings: dict[str, ZoneListing],
+            directory: str,
+        ) -> None:
+            listings[directory] = self.list_directory(directory)
+
         files: list[ZoneFile] = []
-        directories = [""]
+        directories: list[str] = [""]
 
         while directories:
-            listing = self.list_directory(directories.pop())
+            listings: dict[str, ZoneListing] = {}
 
-            files.extend(listing.files)
-            directories.extend(listing.directories)
+            run_all(
+                [partial(list_into, listings, directory) for directory in directories],
+                MAX_LISTINGS,
+            )
+
+            directories = []
+
+            for listing in listings.values():
+                files.extend(listing.files)
+                directories.extend(listing.directories)
 
         return tuple(sorted(files, key=lambda zone_file: zone_file.path))

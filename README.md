@@ -1,26 +1,39 @@
-# watershipup
+# WatershipUp
 
-A Python package and command line tool for uploading static websites to [bunny.net] storage zones.
+`watershipup` is a Python package and command line tool for uploading static websites to [bunny.net] storage zones.
 
-## AI disclosure
+## Requirements
 
-This project is developed by me, Cariad Eccleston, with the assistance of:
+- Python 3.14 or later
+- Your own [bunny.net] account
 
-- *Claude Opus 5.5* in Claude Code for research, code, tests, and reviews
-- *GitHub Copilot* for reviews
+## Installing
 
-I own the scope and requirements of the project, and I make the design decisions: the interfaces, the structure, and the trade-offs.
+```bash
+pip install watershipup
+```
 
-Claude writes the first drafts of code and tests, which I review for correctness and quality, then revise with Claude or by hand.
+## Publishing
 
-Claude writes the first draft of documentation, which I rewrite in my own voice.
+`watershipup` needs three values:
 
-When I'm satisfied, Claude reviews the workspace, and we act *only* on the feedback that I agree with, before I check my understanding and commit.
+- The path of the directory to upload.
+- The name of the storage zone to upload to.
+- The read-write password for that zone.
 
-Finally, Copilot and I review every pull request, before I merge it.
+The directory and zone are passed on the command line, and the password must be set as the `WATERSHIPUP_PASSWORD` environment variable.
 
-I retain full responsibility for all changes that land in the `main` branch.
+```bash
+export WATERSHIPUP_PASSWORD="..."
+watershipup --zone example-zone site-dir
+```
 
-AI-assisted contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+## Exit codes
+
+| Code | Meaning                                          |
+| -    | -                                                |
+| 0    | The publish succeeded.                           |
+| 1    | The publish failed.                              |
+| 2    | An argument or the password is missing or wrong. |
 
 [bunny.net]: https://bunny.net

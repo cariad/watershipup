@@ -46,6 +46,7 @@ def _publish(directory: Path) -> int:
         (
             [
                 "--dry-run",
+                "--output",
                 "markdown",
             ],
             "### Pages\n"
@@ -120,8 +121,35 @@ def test_dry_run(
     assert after == before
 
 
+@pytest.mark.parametrize(
+    ["arguments", "expect"],
+    [
+        (
+            [],
+            "Pages\n"
+            "\n"
+            "Path                  Change\n"
+            "test_main/index.html  Uploaded\n"
+            "test_main/old.html    Deleted\n",
+        ),
+        (
+            [
+                "--output",
+                "markdown",
+            ],
+            "### Pages\n"
+            "\n"
+            "| Path | Change |\n"
+            "| - | - |\n"
+            "| `test_main/index.html` | Uploaded |\n"
+            "| `test_main/old.html` | Deleted |\n",
+        ),
+    ],
+)
 def test_main(
+    arguments: list[str],
     capsys: pytest.CaptureFixture[str],
+    expect: str,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -151,21 +179,19 @@ def test_main(
     (tmp_path / "test_main/old.css").unlink()
     (tmp_path / "test_main/old.html").unlink()
 
-    code = _publish(tmp_path)
+    code = main(
+        [
+            *arguments,
+            "--zone",
+            environment_variable("WATERSHIPUP_TEST_ZONE"),
+            str(tmp_path),
+        ],
+    )
+
     output = capsys.readouterr()
-    lines = output.out.splitlines()
-
-    # The zone can hold other files that are no longer in the directory, so only this
-    # test's lines are looked for, in the order printed, and only the start of the
-    # summary.
-    expect = [
-        "Uploaded 'test_main/index.html'",
-        "Deleted 'test_main/old.html'",
-        "Kept 'test_main/old.css', which is no longer in the directory",
-    ]
-
-    found = [line for line in lines if line in expect]
 
     assert (code, output.err) == (0, "")
-    assert found == expect
-    assert lines[-1].startswith("Uploaded 1 file, left 0 unchanged, deleted ")
+
+    # The first publish deleted every other page and feed in the zone, and kept files
+    # aren't listed, so the only changes are this test's.
+    assert output.out == expect

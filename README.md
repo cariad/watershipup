@@ -36,10 +36,12 @@ Add `--dry-run` to see which files a publish would upload or delete:
 watershipup --dry-run --zone example-zone site-dir
 ```
 
-Add `markdown` to print the plan as Markdown:
+## Markdown
+
+Add `--output markdown` to print changes as Markdown:
 
 ```bash
-watershipup --dry-run markdown --zone example-zone site-dir
+watershipup --output markdown --zone example-zone site-dir
 ```
 
 ## Exit codes

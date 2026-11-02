@@ -14,7 +14,6 @@ import httpx2
 from ..exceptions import WatershipupError
 from ..publishing import plan_publish, publish
 from ..storage_client import StorageClient
-from .summaries import summarise
 from .tables import tabulate_markdown, tabulate_text
 from .version_action import VersionAction
 
@@ -22,7 +21,7 @@ TABULATORS = {
     "text": tabulate_text,
     "markdown": tabulate_markdown,
 }
-"""The function that tabulates a dry run's plan in each format."""
+"""The function that tabulates a plan or report in each format."""
 
 
 class _Terminated(KeyboardInterrupt):
@@ -76,14 +75,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser.add_argument(
         "--dry-run",
+        action="store_true",
+        help="show what a publish would upload and delete",
+    )
+
+    parser.add_argument(
+        "--output",
         choices=list(TABULATORS),
-        const="text",
-        help=(
-            "show what a publish would upload and delete, as text (the default) or "
-            "markdown"
-        ),
+        default="text",
+        help="the output's format: %(choices)s (default: %(default)s)",
         metavar="FORMAT",
-        nargs="?",
     )
 
     parser.add_argument(
@@ -101,6 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
+    tabulate = TABULATORS[args.output]
 
     password = os.environ.get("WATERSHIPUP_PASSWORD")
 
@@ -153,7 +155,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     client,
                 )
 
-            tabulate = TABULATORS[args.dry_run]
             print(tabulate(plan))
 
             return 0
@@ -163,6 +164,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             password=password,
             zone=args.zone,
         )
+
+        print(tabulate(report))
 
     except _Terminated:
         print(f"{parser.prog}: error: terminated", file=sys.stderr)
@@ -190,18 +193,5 @@ def main(argv: Sequence[str] | None = None) -> int:
                 signal.SIGTERM,
                 previous_handler,
             )
-
-    # The zone's listings can hold any name, so paths are printed with control
-    # characters escaped.
-    for path in report.uploaded:
-        print(f"Uploaded {path!r}")
-
-    for path in report.deleted:
-        print(f"Deleted {path!r}")
-
-    for path in report.kept:
-        print(f"Kept {path!r}, which is no longer in the directory")
-
-    print(summarise(report))
 
     return 0

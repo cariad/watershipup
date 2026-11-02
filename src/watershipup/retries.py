@@ -147,7 +147,7 @@ def send_with_retries(
     send: Callable[[], httpx2.Response],
     sleep: Callable[[float], object] = time.sleep,
 ) -> httpx2.Response:
-    """Send a request, and send it again while it fails in a way that might not last.
+    """Send a request, retrying it while it fails with a transient error.
 
     The request is sent up to `MAX_ATTEMPTS` times, waiting as long as `retry_delay`
     says before each retry, and logging a warning that says why.

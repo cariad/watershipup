@@ -6,6 +6,7 @@ from uuid import uuid4
 from tests.checksum_helpers import checksum_of
 from tests.file_helpers import write_files
 from watershipup import PublishReport, publish
+from watershipup.publishing import plan_publish
 from watershipup.storage_client import StorageClient
 from watershipup.zone_file import ZoneFile
 
@@ -26,6 +27,78 @@ def _publish(directory: Path) -> PublishReport:
         password=environment_variable("WATERSHIPUP_TEST_PASSWORD"),
         zone=environment_variable("WATERSHIPUP_TEST_ZONE"),
     )
+
+
+def test_plan_publish(
+    client: StorageClient,
+    tmp_path: Path,
+) -> None:
+    """`plan_publish` must plan a publish without uploading or deleting anything."""
+    write_files(
+        tmp_path,
+        {
+            "test_plan_publish/css/old.css": uuid4().bytes,
+            "test_plan_publish/feed.xml": uuid4().bytes,
+            "test_plan_publish/index.html": uuid4().bytes,
+            "test_plan_publish/old.html": uuid4().bytes,
+        },
+    )
+
+    _publish(tmp_path)
+
+    # Different on every run, so the page is always uploaded.
+    (tmp_path / "test_plan_publish/index.html").write_bytes(uuid4().bytes)
+    (tmp_path / "test_plan_publish/css/old.css").unlink()
+    (tmp_path / "test_plan_publish/old.html").unlink()
+
+    # A page, so if `plan_publish` ever uploaded it, the next run's first publish would
+    # delete it.
+    write_files(
+        tmp_path,
+        {
+            "test_plan_publish/new.html": uuid4().bytes,
+        },
+    )
+
+    before = {
+        zone_file
+        for zone_file in client.walk_zone()
+        if zone_file.path.startswith("test_plan_publish/")
+    }
+
+    plan = plan_publish(
+        tmp_path,
+        client,
+    )
+
+    after = {
+        zone_file
+        for zone_file in client.walk_zone()
+        if zone_file.path.startswith("test_plan_publish/")
+    }
+
+    # The first publish deleted every other page and feed in the zone, so the only
+    # deletion is this test's.
+    result = (
+        tuple(local_file.remote_path for local_file in plan.uploads),
+        plan.deletions,
+        plan.unchanged,
+    )
+
+    expect = (
+        ("test_plan_publish/index.html", "test_plan_publish/new.html"),
+        ("test_plan_publish/old.html",),
+        ("test_plan_publish/feed.xml",),
+    )
+
+    assert result == expect
+
+    # The zone keeps any asset left by other tests, so only this one is looked for.
+    assert "test_plan_publish/css/old.css" in plan.kept
+
+    # Each `ZoneFile` holds its checksum, so this shows that nothing was uploaded or
+    # deleted.
+    assert after == before
 
 
 def test_publish(

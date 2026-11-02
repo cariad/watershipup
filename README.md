@@ -28,12 +28,26 @@ export WATERSHIPUP_PASSWORD="..."
 watershipup --zone example-zone site-dir
 ```
 
+## Dry runs
+
+Add `--dry-run` to see which files a publish would upload or delete:
+
+```bash
+watershipup --dry-run --zone example-zone site-dir
+```
+
+Add `markdown` to print the plan as Markdown:
+
+```bash
+watershipup --dry-run markdown --zone example-zone site-dir
+```
+
 ## Exit codes
 
 | Code | Meaning                                          |
 | -    | -                                                |
-| 0    | The publish succeeded.                           |
-| 1    | The publish failed.                              |
+| 0    | The publish or dry run succeeded.                |
+| 1    | The publish or dry run failed.                   |
 | 2    | An argument or the password is missing or wrong. |
 
 [bunny.net]: https://bunny.net

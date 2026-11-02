@@ -12,13 +12,21 @@ from types import FrameType
 import httpx2
 
 from ..exceptions import WatershipupError
-from ..publishing import publish
+from ..publishing import plan_publish, publish
+from ..storage_client import StorageClient
 from .summaries import summarise
+from .tables import tabulate_markdown, tabulate_text
 from .version_action import VersionAction
+
+TABULATORS = {
+    "text": tabulate_text,
+    "markdown": tabulate_markdown,
+}
+"""The function that tabulates a dry run's plan in each format."""
 
 
 class _Terminated(KeyboardInterrupt):
-    """SIGTERM, which stops a publish as Ctrl+C's `KeyboardInterrupt` does."""
+    """SIGTERM, which stops a publish or dry run as Ctrl+C does."""
 
 
 def _interrupt(signum: int, frame: FrameType | None) -> None:
@@ -45,8 +53,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             the arguments that the program was run with.
 
     Returns:
-        0 when the publish succeeded, 1 when it failed, 2 when the password is
-        missing, 130 when Ctrl+C interrupted it, or 143 when SIGTERM did.
+        0 when the publish or dry run succeeded, 1 when it failed, 2 when the password
+        is missing or invalid, 130 when Ctrl+C interrupted it, or 143 when SIGTERM did.
 
     Raises:
         SystemExit: When the arguments are wrong (with 2), or help or the
@@ -64,6 +72,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=SUPPRESS,
         help="show the version then exit",
         nargs=0,
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        choices=list(TABULATORS),
+        const="text",
+        help=(
+            "show what a publish would upload and delete, as text (the default) or "
+            "markdown"
+        ),
+        metavar="FORMAT",
+        nargs="?",
     )
 
     parser.add_argument(
@@ -91,8 +111,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
+    # h11's error for a header value that it refuses, such as one ending in a line
+    # break, holds the value. So the password is checked before it's sent, to keep it
+    # out of the error.
+    if (
+        not password.isascii()
+        or not password.isprintable()
+        or password != password.strip()
+    ):
+        print(
+            f"{parser.prog}: error: WATERSHIPUP_PASSWORD must be printable ASCII, "
+            "with no spaces at either end",
+            file=sys.stderr,
+        )
+        return 2
+
     # Python's default for SIGTERM kills the process at once, cutting uploads off. So
-    # SIGTERM stops the publish as Ctrl+C does, letting the requests in flight finish.
+    # SIGTERM stops the publish or dry run as Ctrl+C does, letting the requests in
+    # flight finish.
     #
     # Only the main thread can set a signal's handler.
     handles_sigterm = threading.current_thread() is threading.main_thread()
@@ -106,6 +142,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 signal.SIGTERM,
                 _interrupt,
             )
+
+        if args.dry_run:
+            with StorageClient(
+                password=password,
+                zone=args.zone,
+            ) as client:
+                plan = plan_publish(
+                    args.directory,
+                    client,
+                )
+
+            tabulate = TABULATORS[args.dry_run]
+            print(tabulate(plan))
+
+            return 0
 
         report = publish(
             args.directory,

@@ -6,32 +6,16 @@ from unicodedata import normalize
 from pytest import mark
 
 from tests.checksum_helpers import checksum_of
+from tests.local_file_helpers import make_local_file
 from watershipup.local_file import LocalFile
 from watershipup.plan import Plan
 from watershipup.planning import make_plan
 from watershipup.zone_file import ZoneFile
 
 
-def _local_file(remote_path: str, content: bytes) -> LocalFile:
-    """Make a file to upload, with a made-up local path.
-
-    Args:
-        remote_path: The file's storage zone path.
-        content: The file's made-up content.
-
-    Returns:
-        The file to upload.
-    """
-    return LocalFile(
-        Path("public") / remote_path,
-        remote_path,
-        checksum_of(content),
-    )
-
-
 def test_make_plan_accepts_iterators() -> None:
     """`make_plan` must plan from iterators, which it can read only once."""
-    index = _local_file(
+    index = make_local_file(
         "index.html",
         b"made-up index",
     )
@@ -172,7 +156,7 @@ def test_make_plan_keeps_other_files(zone_path: str) -> None:
 
 def test_make_plan_leaves_unchanged_file() -> None:
     """`make_plan` must leave a file alone when the zone has the same one."""
-    index = _local_file(
+    index = make_local_file(
         "index.html",
         b"made-up index",
     )
@@ -212,7 +196,10 @@ def test_make_plan_leaves_unchanged_file() -> None:
 )
 def test_make_plan_matches_paths_exactly(local_path: str, zone_path: str) -> None:
     """`make_plan` must upload a file whose path differs by case or Unicode form."""
-    local_file = _local_file(local_path, b"made-up page")
+    local_file = make_local_file(
+        local_path,
+        b"made-up page",
+    )
 
     plan = make_plan(
         [local_file],
@@ -238,10 +225,25 @@ def test_make_plan_matches_paths_exactly(local_path: str, zone_path: str) -> Non
 def test_make_plan_sorts_by_path() -> None:
     """`make_plan` must sort its uploads and unchanged files by storage zone path."""
     # "-" sorts before "/" in a string, but a `Path` sorts "a/b.html" first.
-    a = _local_file("a-b.html", b"made-up a-b")
-    b = _local_file("a/b.html", b"made-up a/b")
-    c = _local_file("c.css", b"made-up c")
-    d = _local_file("d.css", b"made-up d")
+    a = make_local_file(
+        "a-b.html",
+        b"made-up a-b",
+    )
+
+    b = make_local_file(
+        "a/b.html",
+        b"made-up a/b",
+    )
+
+    c = make_local_file(
+        "c.css",
+        b"made-up c",
+    )
+
+    d = make_local_file(
+        "d.css",
+        b"made-up d",
+    )
 
     plan = make_plan(
         [d, b, c, a],
@@ -309,7 +311,10 @@ def test_make_plan_sorts_deletions_and_kept() -> None:
 
 def test_make_plan_uploads_changed_file() -> None:
     """`make_plan` must upload a file whose checksum differs from the zone's."""
-    index = _local_file("index.html", b"made-up new index")
+    index = make_local_file(
+        "index.html",
+        b"made-up new index",
+    )
 
     plan = make_plan(
         [index],
@@ -334,7 +339,7 @@ def test_make_plan_uploads_changed_file() -> None:
 
 def test_make_plan_uploads_file_without_checksum() -> None:
     """`make_plan` must upload a file that the zone stores without a checksum."""
-    index = _local_file(
+    index = make_local_file(
         "index.html",
         b"made-up index",
     )
@@ -362,7 +367,7 @@ def test_make_plan_uploads_file_without_checksum() -> None:
 
 def test_make_plan_uploads_new_file() -> None:
     """`make_plan` must upload a file that isn't in the zone."""
-    index = _local_file(
+    index = make_local_file(
         "index.html",
         b"made-up index",
     )

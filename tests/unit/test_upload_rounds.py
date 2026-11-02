@@ -1,29 +1,10 @@
 """Tests for upload rounds."""
 
-from pathlib import Path
-
 from pytest import mark
 
-from tests.checksum_helpers import checksum_of
-from watershipup.local_file import LocalFile
+from tests.local_file_helpers import make_local_file
 from watershipup.upload_round import UploadRound
 from watershipup.upload_rounds import round_of, sort_by_round, sort_for_deletion
-
-
-def _local_file(remote_path: str) -> LocalFile:
-    """Make a file to upload, with a made-up local path and content.
-
-    Args:
-        remote_path: The file's storage zone path.
-
-    Returns:
-        The file to upload.
-    """
-    return LocalFile(
-        Path("public") / remote_path,
-        remote_path,
-        checksum_of(b"made-up content"),
-    )
 
 
 @mark.parametrize(
@@ -64,23 +45,23 @@ def test_round_of(
 def test_sort_by_round() -> None:
     """`sort_by_round` must order files by round, keeping each round's order."""
     local_files = [
-        _local_file("robots.txt"),
-        _local_file("index.html"),
-        _local_file("js/site.js"),
-        _local_file("feed.xml"),
-        _local_file("about.html"),
-        _local_file("css/site.css"),
+        make_local_file("robots.txt"),
+        make_local_file("index.html"),
+        make_local_file("js/site.js"),
+        make_local_file("feed.xml"),
+        make_local_file("about.html"),
+        make_local_file("css/site.css"),
     ]
 
     uploads = sort_by_round(local_files)
 
     expect = (
-        _local_file("js/site.js"),
-        _local_file("css/site.css"),
-        _local_file("index.html"),
-        _local_file("about.html"),
-        _local_file("robots.txt"),
-        _local_file("feed.xml"),
+        make_local_file("js/site.js"),
+        make_local_file("css/site.css"),
+        make_local_file("index.html"),
+        make_local_file("about.html"),
+        make_local_file("robots.txt"),
+        make_local_file("feed.xml"),
     )
 
     assert uploads == expect

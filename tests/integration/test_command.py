@@ -7,6 +7,7 @@ import pytest
 
 from tests.file_helpers import write_files
 from watershipup.cli import main
+from watershipup.storage_client import StorageClient
 
 from .storage_zone import environment_variable
 
@@ -27,6 +28,96 @@ def _publish(directory: Path) -> int:
             str(directory),
         ]
     )
+
+
+@pytest.mark.parametrize(
+    ["arguments", "expect"],
+    [
+        (
+            [
+                "--dry-run",
+            ],
+            "Pages\n"
+            "\n"
+            "Path                     Change\n"
+            "test_dry_run/index.html  Upload\n"
+            "test_dry_run/old.html    Delete\n",
+        ),
+        (
+            [
+                "--dry-run",
+                "markdown",
+            ],
+            "### Pages\n"
+            "\n"
+            "| Path | Change |\n"
+            "| - | - |\n"
+            "| `test_dry_run/index.html` | Upload |\n"
+            "| `test_dry_run/old.html` | Delete |\n",
+        ),
+    ],
+)
+def test_dry_run(
+    arguments: list[str],
+    capsys: pytest.CaptureFixture[str],
+    client: StorageClient,
+    expect: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """`--dry-run` must print what a publish would upload and delete, and exit 0."""
+    monkeypatch.setenv(
+        "WATERSHIPUP_PASSWORD",
+        environment_variable("WATERSHIPUP_TEST_PASSWORD"),
+    )
+
+    write_files(
+        tmp_path,
+        {
+            "test_dry_run/index.html": uuid4().bytes,
+            "test_dry_run/old.html": uuid4().bytes,
+        },
+    )
+
+    first = _publish(tmp_path)
+    first_err = capsys.readouterr().err
+
+    assert (first, first_err) == (0, "")
+
+    # Different on every run, so the page is always uploaded.
+    (tmp_path / "test_dry_run/index.html").write_bytes(uuid4().bytes)
+    (tmp_path / "test_dry_run/old.html").unlink()
+
+    before = {
+        zone_file
+        for zone_file in client.walk_zone()
+        if zone_file.path.startswith("test_dry_run/")
+    }
+
+    code = main(
+        [
+            *arguments,
+            "--zone",
+            environment_variable("WATERSHIPUP_TEST_ZONE"),
+            str(tmp_path),
+        ],
+    )
+
+    output = capsys.readouterr()
+
+    after = {
+        zone_file
+        for zone_file in client.walk_zone()
+        if zone_file.path.startswith("test_dry_run/")
+    }
+
+    assert (code, output.err) == (0, "")
+
+    # The first publish deleted every other page and feed in the zone, so the only
+    # deletion is this test's.
+    assert output.out == expect
+
+    assert after == before
 
 
 def test_main(

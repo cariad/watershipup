@@ -42,6 +42,36 @@ def test_console_script_runs() -> None:
     assert result.stdout == f"watershipup {version('watershipup')}\n"
 
 
+def test_dry_run_empty_directory(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A dry run of a directory with no files must exit 1, with an error."""
+    monkeypatch.setenv("WATERSHIPUP_PASSWORD", "made-up")
+
+    code = main(
+        [
+            "--dry-run",
+            "--zone",
+            "example-zone",
+            str(tmp_path),
+        ],
+    )
+
+    output = capsys.readouterr()
+
+    result = (code, output.out, output.err)
+
+    expect = (
+        1,
+        "",
+        f"watershipup: error: No files to publish in {str(tmp_path)!r}\n",
+    )
+
+    assert result == expect
+
+
 def test_empty_directory(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -177,6 +207,45 @@ def test_interrupt(
     expect = (
         expect_code,
         f"watershipup: error: {expect_message}\n",
+    )
+
+    assert result == expect
+
+
+@pytest.mark.parametrize(
+    "password",
+    [
+        "made-up\n",
+        " made-up",
+        "made-up ",
+        "mådé-up",
+    ],
+)
+def test_invalid_password(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    password: str,
+    tmp_path: Path,
+) -> None:
+    """An invalid password must exit 2, with an error that doesn't hold it."""
+    monkeypatch.setenv("WATERSHIPUP_PASSWORD", password)
+
+    code = main(
+        [
+            "--zone",
+            "example-zone",
+            str(tmp_path),
+        ],
+    )
+
+    err = capsys.readouterr().err
+
+    result = (code, err)
+
+    expect = (
+        2,
+        "watershipup: error: WATERSHIPUP_PASSWORD must be printable ASCII, with no "
+        "spaces at either end\n",
     )
 
     assert result == expect

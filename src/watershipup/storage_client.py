@@ -27,9 +27,6 @@ class StorageClient:
 
     Connections are kept open between requests, so close it when you're done, or use it
     as a context manager.
-
-    A request that fails in a way that might not last, like a dropped connection or a
-    503, is sent again, as `send_with_retries` describes.
     """
 
     def __enter__(self) -> Self:

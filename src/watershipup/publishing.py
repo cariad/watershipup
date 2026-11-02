@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .concurrency import run_all
 from .local_directory import walk_local_directory
+from .plan import Plan
 from .planning import make_plan
 from .publish_report import PublishReport
 from .storage_client import StorageClient
@@ -14,6 +15,42 @@ from .upload_rounds import round_of, sort_by_round, sort_for_deletion
 MAX_CONCURRENCY = 16
 """The most uploads or deletes at once, which keeps deletes under bunny.net's limit of
 30 at once."""
+
+
+def plan_publish(
+    directory: Path,
+    client: StorageClient,
+) -> Plan:
+    """Plan a publish of a directory to a storage zone.
+
+    Args:
+        directory: Path to the directory to publish.
+        client: A client for the storage zone.
+
+    Returns:
+        What a publish would do.
+
+    Raises:
+        HiddenPathError: When the directory holds a hidden file or directory, other
+            than `.well-known` at its root.
+        InvalidNameError: When a name in a file's path would be rejected by bunny.net.
+        NoFilesError: When the directory has no files to publish.
+        OSError: When the directory, one of its subdirectories, or one of its files
+            can't be read.
+        RequestFailedError: When bunny.net refuses a listing, after any retries.
+        RuntimeError: When the client has been closed.
+        UnicodeEncodeError: When a file's path within the directory isn't valid UTF-8.
+        ValueError: When one of the zone's listings is invalid.
+        httpx2.RequestError: When bunny.net can't be reached, its response can't be
+            read, or the password is invalid, in which case its message holds the
+            password.
+    """
+    local_files = walk_local_directory(directory)
+
+    return make_plan(
+        local_files,
+        client.walk_zone(),
+    )
 
 
 def publish(
@@ -34,9 +71,6 @@ def publish(
     Once every upload has succeeded, every page and feed in the zone that's no longer in
     the directory is deleted, every feed before every page. Each round's deletes run at
     the same time. Every other file that's no longer in the directory is kept.
-
-    A request that fails in a way that might not last, like a dropped connection or a
-    503, is sent again, up to 5 attempts in all, with a warning logged before each wait.
 
     Args:
         directory: Path to the directory to publish.
@@ -60,25 +94,22 @@ def publish(
         ValueError: When `concurrency` is out of range, or one of the zone's listings
             is invalid.
         httpx2.RequestError: When bunny.net can't be reached, its response can't be
-            read, or the password has whitespace at either end, or a control character
-            other than a tab, such as a line break. That last error's message holds
-            the password.
+            read, or the password is invalid, in which case its message holds the
+            password.
     """
     if not 1 <= concurrency <= MAX_CONCURRENCY:
         raise ValueError(
             f"Concurrency must be 1 to {MAX_CONCURRENCY}: {concurrency!r}",
         )
 
-    local_files = walk_local_directory(directory)
-
     # Every thread shares the client and its pool of connections.
     with StorageClient(
         password=password,
         zone=zone,
     ) as client:
-        plan = make_plan(
-            local_files,
-            client.walk_zone(),
+        plan = plan_publish(
+            directory,
+            client,
         )
 
         # The files are sorted by round, so each group is one whole round.

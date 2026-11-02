@@ -19,8 +19,8 @@ def _rows(plan: Plan) -> dict[UploadRound, list[tuple[str, str]]]:
         plan: The plan.
 
     Returns:
-        Each round's storage zone paths to upload or delete, with "Upload" or
-        "Delete", sorted by path.
+        The storage zone paths to upload or delete in each round with changes, with
+        "Upload" or "Delete", sorted by path.
     """
     rows: dict[UploadRound, list[tuple[str, str]]] = {
         upload_round: [] for upload_round in UploadRound
@@ -45,7 +45,41 @@ def _rows(plan: Plan) -> dict[UploadRound, list[tuple[str, str]]]:
     for round_rows in rows.values():
         round_rows.sort()
 
-    return rows
+    return {
+        upload_round: round_rows
+        for upload_round, round_rows in rows.items()
+        if round_rows
+    }
+
+
+def tabulate_markdown(plan: Plan) -> str:
+    """Tabulate a plan's changes as Markdown.
+
+    Args:
+        plan: The plan.
+
+    Returns:
+        A table for each round with changes, or "No changes." when there are none.
+    """
+    rounds = _rows(plan)
+
+    if not rounds:
+        return "No changes."
+
+    tables: list[str] = []
+
+    for upload_round, rows in rounds.items():
+        lines = [
+            f"### {ROUND_TITLES[upload_round]}",
+            "",
+            "| Path | Change |",
+            "| - | - |",
+            *(f"| `{path}` | {change} |" for path, change in rows),
+        ]
+
+        tables.append("\n".join(lines))
+
+    return "\n\n".join(tables)
 
 
 def tabulate_text(plan: Plan) -> str:
@@ -57,7 +91,7 @@ def tabulate_text(plan: Plan) -> str:
     Returns:
         A table for each round with changes, or "No changes." when there are none.
     """
-    rounds = {upload_round: rows for upload_round, rows in _rows(plan).items() if rows}
+    rounds = _rows(plan)
 
     if not rounds:
         return "No changes."

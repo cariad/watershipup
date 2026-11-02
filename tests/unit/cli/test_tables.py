@@ -1,4 +1,4 @@
-"""Tests for tabulating a plan."""
+"""Tests for tabulating a plan or a publish report."""
 
 from pytest import mark
 
@@ -6,6 +6,7 @@ from tests.local_file_helpers import make_local_file
 from watershipup.cli.tables import tabulate_markdown, tabulate_text
 from watershipup.local_file import LocalFile
 from watershipup.plan import Plan
+from watershipup.publish_report import PublishReport
 
 
 def _uploads(*remote_paths: str) -> tuple[LocalFile, ...]:
@@ -21,7 +22,7 @@ def _uploads(*remote_paths: str) -> tuple[LocalFile, ...]:
 
 
 @mark.parametrize(
-    ["plan", "expect"],
+    ["source", "expect"],
     [
         (
             Plan(
@@ -96,19 +97,52 @@ def _uploads(*remote_paths: str) -> tuple[LocalFile, ...]:
             ),
             "No changes.",
         ),
+        (
+            PublishReport(
+                deleted=("blog/old.html", "old.xml"),
+                kept=("img/old.png",),
+                unchanged=("about.html",),
+                uploaded=(
+                    "css/site.css",
+                    "feed.xml",
+                    "img/logo.png",
+                    "index.html",
+                ),
+            ),
+            "### Assets\n"
+            "\n"
+            "| Path | Change |\n"
+            "| - | - |\n"
+            "| `css/site.css` | Uploaded |\n"
+            "| `img/logo.png` | Uploaded |\n"
+            "\n"
+            "### Pages\n"
+            "\n"
+            "| Path | Change |\n"
+            "| - | - |\n"
+            "| `blog/old.html` | Deleted |\n"
+            "| `index.html` | Uploaded |\n"
+            "\n"
+            "### Feeds\n"
+            "\n"
+            "| Path | Change |\n"
+            "| - | - |\n"
+            "| `feed.xml` | Uploaded |\n"
+            "| `old.xml` | Deleted |",
+        ),
     ],
 )
 def test_tabulate_markdown(
-    plan: Plan,
+    source: Plan | PublishReport,
     expect: str,
 ) -> None:
     """`tabulate_markdown` must tabulate each round's uploads and deletions."""
-    markdown = tabulate_markdown(plan)
+    markdown = tabulate_markdown(source)
     assert markdown == expect
 
 
 @mark.parametrize(
-    ["plan", "expect"],
+    ["source", "expect"],
     [
         (
             Plan(
@@ -187,12 +221,42 @@ def test_tabulate_markdown(
             ),
             "No changes.",
         ),
+        (
+            PublishReport(
+                deleted=("blog/old.html", "old.xml"),
+                kept=("img/old.png",),
+                unchanged=("about.html",),
+                uploaded=(
+                    "css/site.css",
+                    "feed.xml",
+                    "img/logo.png",
+                    "index.html",
+                ),
+            ),
+            "Assets\n"
+            "\n"
+            "Path           Change\n"
+            "css/site.css   Uploaded\n"
+            "img/logo.png   Uploaded\n"
+            "\n"
+            "Pages\n"
+            "\n"
+            "Path           Change\n"
+            "blog/old.html  Deleted\n"
+            "index.html     Uploaded\n"
+            "\n"
+            "Feeds\n"
+            "\n"
+            "Path           Change\n"
+            "feed.xml       Uploaded\n"
+            "old.xml        Deleted",
+        ),
     ],
 )
 def test_tabulate_text(
-    plan: Plan,
+    source: Plan | PublishReport,
     expect: str,
 ) -> None:
     """`tabulate_text` must tabulate each round's uploads and deletions."""
-    text = tabulate_text(plan)
+    text = tabulate_text(source)
     assert text == expect

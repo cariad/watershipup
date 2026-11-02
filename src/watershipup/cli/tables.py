@@ -1,6 +1,7 @@
-"""Functions for tabulating a plan."""
+"""Functions for tabulating a plan or a publish report."""
 
 from ..plan import Plan
+from ..publish_report import PublishReport
 from ..upload_round import UploadRound
 from ..upload_rounds import round_of
 
@@ -12,33 +13,39 @@ ROUND_TITLES = {
 """The title of each round's table."""
 
 
-def _rows(plan: Plan) -> dict[UploadRound, list[tuple[str, str]]]:
+def _rows(
+    source: Plan | PublishReport,
+) -> dict[UploadRound, list[tuple[str, str]]]:
     """List each round's changes.
 
     Args:
-        plan: The plan.
+        source: The plan or the publish report.
 
     Returns:
-        The storage zone paths to upload or delete in each round with changes, with
-        "Upload" or "Delete", sorted by path.
+        The storage zone paths of the uploads and deletions in each round with
+        changes, with "Upload" or "Delete" for a plan, or "Uploaded" or "Deleted" for
+        a publish report, sorted by path.
     """
+    if isinstance(source, Plan):
+        changes = [
+            *((local_file.remote_path, "Upload") for local_file in source.uploads),
+            *((remote_path, "Delete") for remote_path in source.deletions),
+        ]
+    else:
+        changes = [
+            *((remote_path, "Uploaded") for remote_path in source.uploaded),
+            *((remote_path, "Deleted") for remote_path in source.deleted),
+        ]
+
     rows: dict[UploadRound, list[tuple[str, str]]] = {
         upload_round: [] for upload_round in UploadRound
     }
 
-    for local_file in plan.uploads:
-        rows[round_of(local_file.remote_path)].append(
-            (
-                local_file.remote_path,
-                "Upload",
-            ),
-        )
-
-    for remote_path in plan.deletions:
+    for remote_path, change in changes:
         rows[round_of(remote_path)].append(
             (
                 remote_path,
-                "Delete",
+                change,
             ),
         )
 
@@ -52,16 +59,18 @@ def _rows(plan: Plan) -> dict[UploadRound, list[tuple[str, str]]]:
     }
 
 
-def tabulate_markdown(plan: Plan) -> str:
-    """Tabulate a plan's changes as Markdown.
+def tabulate_markdown(
+    source: Plan | PublishReport,
+) -> str:
+    """Tabulate a plan's or a publish report's changes as Markdown.
 
     Args:
-        plan: The plan.
+        source: The plan or the publish report.
 
     Returns:
         A table for each round with changes, or "No changes." when there are none.
     """
-    rounds = _rows(plan)
+    rounds = _rows(source)
 
     if not rounds:
         return "No changes."
@@ -82,16 +91,18 @@ def tabulate_markdown(plan: Plan) -> str:
     return "\n\n".join(tables)
 
 
-def tabulate_text(plan: Plan) -> str:
-    """Tabulate a plan's changes as plain text.
+def tabulate_text(
+    source: Plan | PublishReport,
+) -> str:
+    """Tabulate a plan's or a publish report's changes as plain text.
 
     Args:
-        plan: The plan.
+        source: The plan or the publish report.
 
     Returns:
         A table for each round with changes, or "No changes." when there are none.
     """
-    rounds = _rows(plan)
+    rounds = _rows(source)
 
     if not rounds:
         return "No changes."
